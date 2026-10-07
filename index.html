@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ระบบบันทึกสั่งอะไหล่รายบุคคล</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body data-person="tey">
+
+    <header class="app-header d-flex justify-content-between align-items-center">
+        <div class="d-flex align-items-center gap-3">
+            <div class="logo-box">
+                <i class="fa-solid fa-warehouse"></i>
+            </div>
+            <div>
+                <div class="d-flex align-items-center gap-2">
+                    <h5 class="m-0 fw-bold">ระบบบันทึกสั่งอะไหล่รายบุคคล</h5>
+                    <span class="badge rounded-pill px-3 py-1" style="font-size: 0.75rem;">
+                        <i class="fa-solid fa-circle me-1" style="font-size: 6px;"></i> ออนไลน์ Real-time
+                    </span>
+                </div>
+                <small id="header-sub" style="font-size: 0.85rem;color:var(--text-gray);">เลือกชื่อเพื่อเข้าเมนูของตัวเอง</small>
+            </div>
+        </div>
+    </header>
+
+    <div class="container-fluid px-4 py-4">
+
+        <div class="mb-4">
+            <div class="card-custom p-4">
+                <div class="tab-navigation">
+                    <button type="button" class="tab-btn" data-tab="search-all">
+                        <i class="fa-solid fa-magnifying-glass me-2"></i>ค้นหาทั้งหมด
+                    </button>
+                    <button type="button" class="tab-btn active" data-tab="tey">
+                        <i class="fa-solid fa-user-gear me-2"></i>พี่เต้ย
+                    </button>
+                    <button type="button" class="tab-btn" data-tab="som">
+                        <i class="fa-solid fa-user-tag me-2"></i>พี่ส้ม
+                    </button>
+                    <button type="button" class="tab-btn" data-tab="nu">
+                        <i class="fa-solid fa-user-check me-2"></i>พี่หนู
+                    </button>
+                    <button type="button" class="tab-btn" data-tab="o">
+                        <i class="fa-solid fa-user-tie me-2"></i>พี่อิ๋ว
+                    </button>
+                    <button type="button" class="tab-btn" data-tab="flash">
+                        <i class="fa-solid fa-bolt me-2"></i>พี่แฟลช
+                    </button>
+                    <button type="button" class="tab-btn" data-tab="oi">
+                        <i class="fa-solid fa-user me-2"></i>พี่โอ
+                    </button>
+                    <button type="button" class="tab-btn" data-tab="bek">
+                        <i class="fa-solid fa-user-astronaut me-2"></i>พี่เบ็ก
+                    </button>
+                    <button type="button" class="tab-btn" data-tab="chang">
+                        <i class="fa-solid fa-wrench me-2"></i>ช่าง
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <section id="view-search-all" class="mt-4 hidden">
+            <div class="card-custom p-4">
+                <h5 class="fw-bold mb-4">
+                    <i class="fa-solid fa-magnifying-glass me-2" style="color:var(--primary);"></i>
+                    ค้นหาหมายเลขอะไหล่ทั้งหมด
+                </h5>
+                <div class="mb-3">
+                    <input type="text" id="search-all-box" class="form-control" placeholder="พิมพ์เลขอะไหล่เพื่อค้นหา..." style="border-radius:10px;padding:12px 16px;">
+                </div>
+                <div class="card-custom overflow-hidden">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead>
+                                <tr class="custom-table-header">
+                                    <th class="py-3 ps-3">หมายเลขอะไหล่</th>
+                                    <th class="py-3">ชื่ออะไหล่</th>
+                                    <th class="py-3">สั่งโดย</th>
+                                    <th class="py-3 text-center">จำนวน</th>
+                                    <th class="py-3">วันที่สั่ง</th>
+                                    <th class="py-3">ประเภท</th>
+                                    <th class="py-3">หมายเหตุ</th>
+                                </tr>
+                            </thead>
+                            <tbody id="search-all-tbody"></tbody>
+                        </table>
+                    </div>
+                    <p id="search-all-empty" class="text-center text-muted py-5 mb-0 hidden" style="font-size:1rem;">ไม่พบรายการที่ค้นหา</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="view-person" class="mt-4">
+            <div class="card-custom p-4">
+                <div class="tab-navigation">
+                    <button type="button" class="tab-btn active" data-menu="home">
+                        <i class="fa-solid fa-grip me-2"></i>เมนูหลัก
+                    </button>
+                    <button type="button" class="tab-btn" data-menu="add">
+                        <i class="fa-solid fa-square-plus me-2"></i>บันทึกสั่งอะไหล่
+                    </button>
+                    <button type="button" class="tab-btn" data-menu="list">
+                        <i class="fa-solid fa-list me-2"></i>รายการอะไหล่
+                    </button>
+                </div>
+            </div>
+            <div class="mt-4">
+                    <div id="menu-home">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <button type="button" class="card menu-card card-custom p-4 w-100 text-start" data-open-menu="add">
+                                    <div class="mb-3" style="background:var(--primary);width:56px;height:56px;border-radius:10px;display:flex;align-items:center;justify-content:center;color:white;"><i class="fa-solid fa-square-plus fa-lg"></i></div>
+                                    <h5 class="fw-bold mb-2">บันทึกสั่งอะไหล่</h5>
+                                    <p class="text-muted mb-0" style="font-size:0.9rem;">กรอกหมายเลข จำนวน และรายละเอียดของตัวเอง</p>
+                                </button>
+                            </div>
+                            <div class="col-md-6">
+                                <button type="button" class="card menu-card card-custom p-4 w-100 text-start" data-open-menu="list">
+                                    <div class="mb-3" style="background:var(--primary);width:56px;height:56px;border-radius:10px;display:flex;align-items:center;justify-content:center;color:white;"><i class="fa-solid fa-list fa-lg"></i></div>
+                                    <h5 class="fw-bold mb-2">รายการของฉัน</h5>
+                                    <p class="text-muted mb-0" style="font-size:0.9rem;">ดู แก้ไข หรือลบเฉพาะรายการของคนนี้</p>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="menu-add" class="hidden">
+                        <div class="card-custom p-4">
+                            <h5 class="fw-bold mb-4">
+                                <i class="fa-solid fa-square-plus me-2" style="color:var(--primary);"></i>
+                                บันทึกสั่งอะไหล่ (<span class="person-name">พี่เต้ย</span>)
+                            </h5>
+                            
+                            <!-- Form to add item -->
+                            <div class="card-custom p-3 mb-3" style="background:var(--bg-gray);">
+                                <h6 class="fw-bold mb-3" style="font-size:0.9rem;">เพิ่มรายการอะไหล่</h6>
+                                <div class="row g-2">
+                                    <div class="col-md-4">
+                                        <label class="form-label small fw-bold mb-1">เลขอะไหล่ (10 หลัก) *</label>
+                                        <input type="text" id="temp-part-no" class="form-control form-control-sm" placeholder="กรอกเลขอะไหล่" required maxlength="10" style="display:none;">
+                                        <div class="pin-boxes-small" id="temp-pin-boxes"></div>
+                                        <div class="pin-hidden-input-container-small">
+                                            <input type="text" id="temp-part-no-hidden" class="form-control form-control-sm" placeholder="กรอกเลขอะไหล่" required maxlength="10" autocomplete="off">
+                                        </div>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary mt-1" id="btn-clear-temp-pin" style="font-size:0.75rem;padding:4px 8px;">
+                                            <i class="fa-solid fa-eraser me-1"></i> ล้าง
+                                        </button>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label small fw-bold mb-1">ชื่ออะไหล่</label>
+                                        <input type="text" id="temp-part-name" class="form-control form-control-sm" placeholder="ชื่ออะไหล่">
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label small fw-bold mb-1">จำนวน *</label>
+                                        <input type="number" id="temp-qty" class="form-control form-control-sm" value="1" min="1" required>
+                                    </div>
+                                    <div class="col-md-2 d-flex align-items-end">
+                                        <button type="button" class="btn btn-primary w-100" id="btn-add-item">
+                                            <i class="fa-solid fa-plus"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Temporary items list -->
+                            <div class="card-custom p-3 mb-3" id="temp-items-container" style="display:none;">
+                                <h6 class="fw-bold mb-3" style="font-size:0.9rem;">รายการที่จะบันทึก (<span id="temp-count">0</span> รายการ)</h6>
+                                <div class="table-responsive">
+                                    <table class="table table-sm align-middle mb-0">
+                                        <thead>
+                                            <tr class="custom-table-header">
+                                                <th class="py-2 ps-2" style="width: 50px;">#</th>
+                                                <th class="py-2">เลขอะไหล่</th>
+                                                <th class="py-2">ชื่ออะไหล่</th>
+                                                <th class="py-2 text-center">จำนวน</th>
+                                                <th class="py-2 text-center">จัดการ</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="temp-items-tbody"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            
+                            <!-- Order details -->
+                            <div id="order-form">
+                                <input type="hidden" id="edit-id">
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold" style="color:var(--text-gray);font-size:0.9rem;">ประเภทการสั่ง *</label>
+                                    <select id="order-type" class="form-select">
+                                        <option value="normal">สั่งปกติ (สต็อก)</option>
+                                        <option value="urgent">สั่งด่วน</option>
+                                    </select>
+                                </div>
+                                <div class="mb-4">
+                                    <label class="form-label fw-bold" style="color:var(--text-gray);font-size:0.9rem;">หมายเหตุ</label>
+                                    <input type="text" id="note" class="form-control" placeholder="เช่น ทะเบียนรถ / รายละเอียด">
+                                </div>
+                                <button type="button" class="btn btn-primary w-100 fw-bold py-3" id="btn-save">
+                                    <span class="spinner"></span>
+                                    <i class="fa-solid fa-floppy-disk me-2"></i> บันทึกรายการของ<span class="person-name">พี่เต้ย</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="menu-list" class="hidden">
+                        <div class="card-custom p-3 mb-3">
+                            <input type="text" id="search-box" class="form-control" placeholder="ค้นหารายการของตัวเอง..." style="border-radius:10px;padding:12px 16px;">
+                        </div>
+                        <div class="card-custom p-3 mb-3">
+                            <div class="tab-navigation" id="date-tabs">
+                                <button type="button" class="tab-btn active" data-date="all">
+                                    <i class="fa-solid fa-calendar-days me-2"></i>ทั้งหมด
+                                </button>
+                            </div>
+                        </div>
+                        <div id="order-list-container">
+                            <p id="empty-state" class="text-center text-muted py-5 mb-0 hidden" style="font-size:1rem;">ยังไม่มีรายการสั่งอะไหล่ของคนนี้</p>
+                        </div>
+                    </div>
+        </section>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <script src="app.js"></script>
+    <script>
+        // PIN Input Logic (inline to ensure it works)
+        function initTempPinInput() {
+            const pinBoxes = document.getElementById('temp-pin-boxes');
+            const hiddenInput = document.getElementById('temp-part-no-hidden');
+            const partNoInput = document.getElementById('temp-part-no');
+            const clearBtn = document.getElementById('btn-clear-temp-pin');
+            
+            if (!pinBoxes || !hiddenInput) {
+                console.log('PIN elements not found, retrying...');
+                setTimeout(initTempPinInput, 100);
+                return;
+            }
+            
+            // Clear existing boxes if any
+            pinBoxes.innerHTML = '';
+            
+            // Create 10 PIN boxes
+            for (let i = 0; i < 10; i++) {
+                const box = document.createElement('div');
+                box.className = 'pin-box-small';
+                box.dataset.index = i;
+                pinBoxes.appendChild(box);
+            }
+            
+            const boxes = pinBoxes.querySelectorAll('.pin-box-small');
+            
+            function updateBoxes() {
+                const value = hiddenInput.value.toUpperCase();
+                boxes.forEach(function (box, index) {
+                    if (index < value.length) {
+                        box.textContent = value[index];
+                        box.classList.add('filled');
+                    } else {
+                        box.textContent = '';
+                        box.classList.remove('filled');
+                    }
+                });
+                
+                // Update active state
+                boxes.forEach(function (box) {
+                    box.classList.remove('active');
+                });
+                if (value.length < 10) {
+                    boxes[value.length].classList.add('active');
+                }
+                
+                // Sync with actual input
+                partNoInput.value = value;
+            }
+            
+            hiddenInput.addEventListener('input', function () {
+                this.value = this.value.toUpperCase();
+                updateBoxes();
+            });
+            
+            hiddenInput.addEventListener('focus', function () {
+                updateBoxes();
+            });
+            
+            hiddenInput.addEventListener('blur', function () {
+                boxes.forEach(function (box) {
+                    box.classList.remove('active');
+                });
+            });
+            
+            pinBoxes.addEventListener('click', function () {
+                hiddenInput.focus();
+            });
+            
+            if (clearBtn) {
+                clearBtn.addEventListener('click', function () {
+                    hiddenInput.value = '';
+                    partNoInput.value = '';
+                    boxes.forEach(function (box) {
+                        box.textContent = '';
+                        box.classList.remove('filled', 'active');
+                    });
+                    boxes[0].classList.add('active');
+                    hiddenInput.focus();
+                });
+            }
+            
+            console.log('PIN input initialized successfully');
+        }
+        
+        // Initialize when ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function() {
+                setTimeout(initTempPinInput, 100);
+            });
+        } else {
+            setTimeout(initTempPinInput, 100);
+        }
+    </script>
+</body>
+</html>
