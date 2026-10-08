@@ -168,8 +168,10 @@ function openPerson(id) {
         renderTempItems();
         updatePersonTabs();
 
-        // Show person view, hide search all view
+        // Show person view, hide search all view, notes view and alerts view
         document.getElementById('view-search-all').classList.add('hidden');
+        document.getElementById('view-notes').classList.add('hidden');
+        document.getElementById('view-alerts').classList.add('hidden');
         document.getElementById('view-person').classList.remove('hidden');
 
         // Add animation to logo
@@ -208,8 +210,10 @@ function showSearchAll() {
 
     updatePersonTabs();
 
-    // Show search all view, hide person view
+    // Show search all view, hide person view, notes view and alerts view
     document.getElementById('view-person').classList.add('hidden');
+    document.getElementById('view-notes').classList.add('hidden');
+    document.getElementById('view-alerts').classList.add('hidden');
     document.getElementById('view-search-all').classList.remove('hidden');
     renderSearchAll();
 
@@ -218,6 +222,287 @@ function showSearchAll() {
     logoBox.classList.remove('pulse');
     void logoBox.offsetWidth;
     logoBox.classList.add('pulse');
+}
+
+function showNotes() {
+    currentPerson = 'notes';
+    const headerSub = document.getElementById('header-sub');
+
+    headerSub.classList.add('fade');
+
+    setTimeout(function() {
+        headerSub.textContent = 'โน๊ตทั่วไป';
+        headerSub.classList.remove('fade');
+    }, 150);
+
+    updatePersonTabs();
+
+    // Show notes view, hide person view, search all view and alerts view
+    document.getElementById('view-person').classList.add('hidden');
+    document.getElementById('view-search-all').classList.add('hidden');
+    document.getElementById('view-alerts').classList.add('hidden');
+    document.getElementById('view-notes').classList.remove('hidden');
+
+    // Load notes from Firebase
+    loadNotes();
+
+    // Add animation to logo
+    const logoBox = document.querySelector('.logo-box');
+    logoBox.classList.remove('pulse');
+    void logoBox.offsetWidth;
+    logoBox.classList.add('pulse');
+}
+
+function showAlerts() {
+    currentPerson = 'alerts';
+    const headerSub = document.getElementById('header-sub');
+
+    headerSub.classList.add('fade');
+
+    setTimeout(function() {
+        headerSub.textContent = 'รายการที่มาส่งแล้ว';
+        headerSub.classList.remove('fade');
+    }, 150);
+
+    updatePersonTabs();
+
+    // Show alerts view, hide person view, search all view and notes view
+    document.getElementById('view-person').classList.add('hidden');
+    document.getElementById('view-search-all').classList.add('hidden');
+    document.getElementById('view-notes').classList.add('hidden');
+    document.getElementById('view-alerts').classList.remove('hidden');
+
+    // Load received items from Firebase
+    loadAlerts();
+
+    // Add animation to logo
+    const logoBox = document.querySelector('.logo-box');
+    logoBox.classList.remove('pulse');
+    void logoBox.offsetWidth;
+    logoBox.classList.add('pulse');
+}
+
+function loadAlerts() {
+    database.ref('orders').once('value').then(function (snapshot) {
+        const all = snapshot.val();
+        const container = document.getElementById('alerts-container');
+        const empty = document.getElementById('alerts-empty');
+        container.innerHTML = '';
+        container.appendChild(empty);
+
+        if (!all) {
+            empty.classList.remove('hidden');
+            return;
+        }
+
+        // Get all received items
+        const receivedItems = [];
+        Object.keys(all).forEach(function (personId) {
+            all[personId].forEach(function (item) {
+                if (item.received) {
+                    receivedItems.push({
+                        ...item,
+                        personId: personId,
+                        personName: PEOPLE[personId].name
+                    });
+                }
+            });
+        });
+
+        if (receivedItems.length === 0) {
+            empty.classList.remove('hidden');
+            return;
+        }
+
+        empty.classList.add('hidden');
+
+        // Group by batchId
+        const grouped = {};
+        receivedItems.forEach(function (item) {
+            if (!grouped[item.batchId]) {
+                grouped[item.batchId] = {
+                    personName: item.personName,
+                    personId: item.personId,
+                    date: item.date,
+                    time: item.time,
+                    type: item.type,
+                    note: item.note,
+                    items: []
+                };
+            }
+            grouped[item.batchId].items.push(item);
+        });
+
+        Object.values(grouped).forEach(function (group) {
+            const totalQty = group.items.reduce(function (sum, item) {
+                return sum + item.qty;
+            }, 0);
+
+            const card = document.createElement('div');
+            card.className = 'card-custom p-4 mb-3';
+            card.innerHTML =
+                '<div class="mb-3 pb-3" style="border-bottom: 2px solid var(--border-color);">' +
+                '<div class="d-flex justify-content-between align-items-center">' +
+                '<div>' +
+                '<h6 class="fw-bold mb-1">' +
+                '<i class="fa-solid fa-user me-2" style="color:var(--primary);"></i>' +
+                group.personName +
+                '</h6>' +
+                '<div class="text-muted small">' +
+                '<span>' + group.date + ' เวลา ' + group.time + '</span>' +
+                (group.note ? ' <span class="ms-2">- ' + escapeHtml(group.note) + '</span>' : '') +
+                '</div>' +
+                '</div>' +
+                '<span class="badge bg-secondary">' + group.items.length + ' รายการ (' + totalQty + ' ชิ้น)</span>' +
+                '</div>' +
+                '</div>' +
+                '<table class="table table-sm align-middle mb-0">' +
+                '<thead>' +
+                '<tr class="custom-table-header">' +
+                '<th class="py-2 ps-2" style="width: 50px;">#</th>' +
+                '<th class="py-2">หมายเลขอะไหล่</th>' +
+                '<th class="py-2">ชื่ออะไหล่</th>' +
+                '<th class="py-2 text-center">จำนวน</th>' +
+                '</tr>' +
+                '</thead>' +
+                '<tbody>';
+
+            group.items.forEach(function (item, index) {
+                card.innerHTML +=
+                    '<tr>' +
+                    '<td class="ps-2 fw-medium">' + (index + 1) + '</td>' +
+                    '<td class="fw-bold text-primary">' + escapeHtml(item.partNo) + '</td>' +
+                    '<td>' + escapeHtml(item.partName || '-') + '</td>' +
+                    '<td class="text-center fw-bold">' + item.qty + '</td>' +
+                    '</tr>';
+            });
+
+            card.innerHTML +=
+                '</tbody>' +
+                '</table>' +
+                '<div class="mt-3 text-end">' +
+                '<button class="btn btn-success" data-confirm-batch="' + group.items[0].batchId + '" data-person="' + group.personId + '">' +
+                '<i class="fa-solid fa-check me-2"></i> ยืนยันรับของแล้ว (ลบรายการ)' +
+                '</button>' +
+                '</div>';
+
+            container.appendChild(card);
+        });
+    }).catch(function (error) {
+        console.error('Error loading alerts:', error);
+    });
+}
+
+function confirmReceivedBatch(batchId, personId) {
+    if (!confirm('ยืนยันว่ารับของแล้วและลบรายการนี้?')) return;
+
+    database.ref('orders/' + personId).once('value').then(function (snapshot) {
+        const list = snapshot.val() || [];
+        const filtered = list.filter(function (x) { return x.batchId !== batchId; });
+        database.ref('orders/' + personId).set(filtered).then(function () {
+            loadAlerts();
+        }).catch(function (error) {
+            console.error('Error deleting batch:', error);
+            alert('เกิดข้อผิดพลาดในการลบรายการ: ' + error.message);
+        });
+    }).catch(function (error) {
+        console.error('Error loading orders:', error);
+    });
+}
+
+function loadNotes() {
+    database.ref('notes').on('value', function (snapshot) {
+        const notes = snapshot.val();
+        const container = document.getElementById('notes-container');
+        const empty = document.getElementById('notes-empty');
+        container.innerHTML = '';
+        container.appendChild(empty);
+
+        if (!notes || Object.keys(notes).length === 0) {
+            empty.classList.remove('hidden');
+            return;
+        }
+
+        empty.classList.add('hidden');
+
+        Object.values(notes).forEach(function (note) {
+            const card = document.createElement('div');
+            card.className = 'card-custom p-4 mb-3';
+            card.innerHTML =
+                '<div class="d-flex justify-content-between align-items-start">' +
+                '<div class="flex-grow-1">' +
+                '<p class="mb-2" style="white-space: pre-wrap;">' + escapeHtml(note.text) + '</p>' +
+                '<small class="text-muted">' + note.date + ' ' + note.time + '</small>' +
+                '</div>' +
+                '<div class="d-flex gap-2">' +
+                '<button class="btn btn-sm btn-outline-secondary" data-edit-note="' + note.id + '">' +
+                '<i class="fa-solid fa-pen"></i>' +
+                '</button>' +
+                '<button class="btn btn-sm btn-outline-danger" data-delete-note="' + note.id + '">' +
+                '<i class="fa-solid fa-trash"></i>' +
+                '</button>' +
+                '</div>' +
+                '</div>';
+            container.appendChild(card);
+        });
+    });
+}
+
+function addNote() {
+    const text = document.getElementById('note-input').value.trim();
+    if (!text) {
+        alert('กรุณาพิมพ์โน๊ต');
+        return;
+    }
+
+    const noteId = String(Date.now()) + Math.random().toString(36).substr(2, 9);
+    const note = {
+        id: noteId,
+        text: text,
+        date: todayTh(),
+        time: getCurrentTime()
+    };
+
+    database.ref('notes/' + noteId).set(note).then(function () {
+        document.getElementById('note-input').value = '';
+    }).catch(function (error) {
+        console.error('Error adding note:', error);
+        alert('เกิดข้อผิดพลาดในการเพิ่มโน๊ต: ' + error.message);
+    });
+}
+
+function deleteNote(noteId) {
+    if (!confirm('ลบโน๊ตนี้หรือไม่?')) return;
+
+    database.ref('notes/' + noteId).remove().then(function () {
+        // Note removed successfully
+    }).catch(function (error) {
+        console.error('Error deleting note:', error);
+        alert('เกิดข้อผิดพลาดในการลบโน๊ต: ' + error.message);
+    });
+}
+
+function editNote(noteId) {
+    database.ref('notes/' + noteId).once('value').then(function (snapshot) {
+        const note = snapshot.val();
+        if (!note) return;
+
+        const newText = prompt('แก้ไขโน๊ต:', note.text);
+        if (newText === null) return; // User cancelled
+
+        if (newText.trim()) {
+            database.ref('notes/' + noteId).update({
+                text: newText.trim(),
+                date: todayTh(),
+                time: getCurrentTime()
+            }).catch(function (error) {
+                console.error('Error updating note:', error);
+                alert('เกิดข้อผิดพลาดในการแก้ไขโน๊ต: ' + error.message);
+            });
+        }
+    }).catch(function (error) {
+        console.error('Error loading note:', error);
+    });
 }
 
 function renderTable() {
@@ -285,6 +570,15 @@ function renderTable() {
             '</div>' +
             '<div class="d-flex gap-2 align-items-center">' +
             '<span class="badge bg-secondary">' + group.items.length + ' รายการ (' + totalQty + ' ชิ้น)</span>' +
+            '<button class="btn btn-outline-secondary btn-sm" data-edit-batch="' + group.items[0].batchId + '" title="แก้ไขหมายเหตุ">' +
+            '<i class="fa-solid fa-pen"></i>' +
+            '</button>' +
+            '<button class="btn btn-outline-primary btn-sm" data-add-to-batch="' + group.items[0].batchId + '" title="เพิ่มรายการ">' +
+            '<i class="fa-solid fa-plus"></i>' +
+            '</button>' +
+            '<button class="btn btn-outline-success btn-sm" data-print-batch="' + group.items[0].batchId + '" title="พิมพ์">' +
+            '<i class="fa-solid fa-print"></i>' +
+            '</button>' +
             '<button class="btn btn-outline-danger btn-sm" data-delete-batch="' + group.items[0].batchId + '" title="ลบทั้งกลุ่ม">' +
             '<i class="fa-solid fa-trash"></i>' +
             '</button>' +
@@ -343,10 +637,106 @@ function escapeHtml(s) {
     });
 }
 
+function printBatch(batchId) {
+    const list = getOrders();
+    const batchItems = list.filter(function (x) { return x.batchId === batchId; });
+    if (batchItems.length === 0) return;
+
+    const group = {
+        date: batchItems[0].date,
+        time: batchItems[0].time,
+        type: batchItems[0].type,
+        note: batchItems[0].note,
+        items: batchItems
+    };
+
+    const totalQty = group.items.reduce(function (sum, item) {
+        return sum + item.qty;
+    }, 0);
+
+    // Create print HTML
+    let printHTML = '<!DOCTYPE html><html><head><meta charset="UTF-8">';
+    printHTML += '<title>พิมพ์รายการสั่งอะไหล่</title>';
+    printHTML += '<style>';
+    printHTML += 'body { font-family: Arial, sans-serif; padding: 20px; margin: 0; }';
+    printHTML += '.header { text-align: center; margin-bottom: 25px; padding-bottom: 15px; border-bottom: 2px solid #000; }';
+    printHTML += '.header h2 { margin: 0; font-size: 28px; }';
+    printHTML += '.header p { margin: 8px 0; font-size: 16px; }';
+    printHTML += 'table { width: 100%; border-collapse: collapse; margin-top: 25px; border: 2px solid #000; }';
+    printHTML += 'th, td { border: 1px solid #000; padding: 12px 10px; text-align: left; }';
+    printHTML += 'th { background: #f0f0f0; font-weight: bold; font-size: 16px; border-bottom: 2px solid #000; }';
+    printHTML += 'td { font-size: 15px; }';
+    printHTML += 'tr:nth-child(even) { background: #fafafa; }';
+    printHTML += '.text-center { text-align: center; }';
+    printHTML += '.footer { margin-top: 35px; padding-top: 15px; border-top: 1px solid #000; font-size: 14px; }';
+    printHTML += '</style>';
+    printHTML += '</head><body>';
+    printHTML += '<div class="header">';
+    printHTML += '<h2>รายการสั่งอะไหล่</h2>';
+    printHTML += '<p><strong>ของ:</strong> ' + escapeHtml(PEOPLE[currentPerson].name) + '</p>';
+    printHTML += '<p><strong>วันที่:</strong> ' + group.date + ' <strong>เวลา:</strong> ' + group.time + '</p>';
+    if (group.type === 'urgent') {
+        printHTML += '<p><strong>ประเภท:</strong> <span style="color: #ff0000; font-weight: bold;">สั่งด่วน</span></p>';
+    } else {
+        printHTML += '<p><strong>ประเภท:</strong> <span style="color: #008000; font-weight: bold;">สั่งปกติ</span></p>';
+    }
+    if (group.note) {
+        printHTML += '<p><strong>หมายเหตุ:</strong> ' + escapeHtml(group.note) + '</p>';
+    }
+    printHTML += '</div>';
+    printHTML += '<table>';
+    printHTML += '<thead><tr>';
+    printHTML += '<th style="width: 60px;">#</th>';
+    printHTML += '<th style="width: 120px;">หมายเลขอะไหล่</th>';
+    printHTML += '<th>ชื่ออะไหล่</th>';
+    printHTML += '<th style="width: 80px;" class="text-center">จำนวน</th>';
+    printHTML += '</tr></thead><tbody>';
+
+    group.items.forEach(function (item, index) {
+        printHTML += '<tr>';
+        printHTML += '<td>' + (index + 1) + '</td>';
+        printHTML += '<td>' + escapeHtml(item.partNo) + '</td>';
+        printHTML += '<td>' + escapeHtml(item.partName || '-') + '</td>';
+        printHTML += '<td class="text-center">' + item.qty + '</td>';
+        printHTML += '</tr>';
+    });
+
+    printHTML += '</tbody></table>';
+    printHTML += '<div class="footer">';
+    printHTML += '<p><strong>สรุป:</strong> ' + group.items.length + ' รายการ (' + totalQty + ' ชิ้น)</p>';
+    printHTML += '<p>พิมพ์เมื่อ: ' + todayTh() + ' ' + getCurrentTime() + '</p>';
+    printHTML += '</div>';
+    printHTML += '</body></html>';
+
+    // Create iframe for printing
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.top = '-9999px';
+    iframe.style.left = '-9999px';
+    document.body.appendChild(iframe);
+
+    const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+    iframeDoc.open();
+    iframeDoc.write(printHTML);
+    iframeDoc.close();
+
+    // Print from iframe
+    iframe.contentWindow.print();
+
+    // Remove iframe after printing
+    setTimeout(function () {
+        document.body.removeChild(iframe);
+    }, 1000);
+}
+
 document.querySelectorAll('.tab-btn[data-tab]').forEach(function (tab) {
     tab.addEventListener('click', function () {
         if (tab.dataset.tab === 'search-all') {
             showSearchAll();
+        } else if (tab.dataset.tab === 'notes') {
+            showNotes();
+        } else if (tab.dataset.tab === 'alerts') {
+            showAlerts();
         } else {
             openPerson(tab.dataset.tab);
         }
@@ -359,10 +749,29 @@ document.querySelectorAll('#view-person .tab-btn').forEach(function (btn) {
     });
 });
 
+document.getElementById('btn-add-note').addEventListener('click', addNote);
+
+document.getElementById('notes-container').addEventListener('click', function (e) {
+    const editBtn = e.target.closest('[data-edit-note]');
+    const deleteBtn = e.target.closest('[data-delete-note]');
+
+    if (editBtn) {
+        editNote(editBtn.dataset.editNote);
+    }
+
+    if (deleteBtn) {
+        deleteNote(deleteBtn.dataset.deleteNote);
+    }
+});
+
 function updatePersonTabs() {
     document.querySelectorAll('.tab-btn[data-tab]').forEach(function (tab) {
         if (tab.dataset.tab === 'search-all') {
             tab.classList.toggle('active', currentPerson === 'search-all');
+        } else if (tab.dataset.tab === 'notes') {
+            tab.classList.toggle('active', currentPerson === 'notes');
+        } else if (tab.dataset.tab === 'alerts') {
+            tab.classList.toggle('active', currentPerson === 'alerts');
         } else {
             tab.classList.toggle('active', tab.dataset.tab === currentPerson);
         }
@@ -636,22 +1045,43 @@ document.getElementById('btn-save').addEventListener('click', function () {
         const orderType = document.getElementById('order-type').value;
         const note = document.getElementById('note').value.trim();
         
-        if (editId) {
+        let batchId, date, time;
+
+        // Check if adding to existing batch
+        if (editId && editId.startsWith('add-to-batch:')) {
+            // Add to existing batch
+            batchId = editId.replace('add-to-batch:', '');
+            const existingBatch = list.find(function (x) { return x.batchId === batchId; });
+            if (existingBatch) {
+                date = existingBatch.date;
+                time = existingBatch.time;
+            } else {
+                date = todayTh();
+                time = getCurrentTime();
+            }
+        } else if (editId) {
             // Edit mode - remove old item
             const idx = list.findIndex(function (x) { return x.id === editId; });
             if (idx !== -1) {
                 list.splice(idx, 1);
             }
+            // Create new batch for edited item
+            batchId = String(Date.now()) + Math.random().toString(36).substr(2, 9);
+            date = todayTh();
+            time = getCurrentTime();
+        } else {
+            // Normal save - create new batch
+            batchId = String(Date.now()) + Math.random().toString(36).substr(2, 9);
+            date = todayTh();
+            time = getCurrentTime();
         }
-        
+
         // Add all temp items
-        const batchId = String(Date.now()) + Math.random().toString(36).substr(2, 9);
-        const time = getCurrentTime();
         tempItems.forEach(function (item) {
             list.unshift({
                 id: String(Date.now()) + Math.random().toString(36).substr(2, 9),
                 batchId: batchId,
-                date: todayTh(),
+                date: date,
                 time: time,
                 partNo: item.partNo,
                 partName: item.partName,
@@ -701,12 +1131,66 @@ document.getElementById('order-list-container').addEventListener('click', functi
     const delBtn = e.target.closest('[data-del]');
     const receiveBtn = e.target.closest('[data-receive]');
     const deleteBatchBtn = e.target.closest('[data-delete-batch]');
+    const editBatchBtn = e.target.closest('[data-edit-batch]');
+    const addToBatchBtn = e.target.closest('[data-add-to-batch]');
+    const printBatchBtn = e.target.closest('[data-print-batch]');
 
     if (deleteBatchBtn) {
         if (!confirm('ลบทั้งกลุ่มนี้หรือไม่?')) return;
         const batchId = deleteBatchBtn.dataset.deleteBatch;
         setOrders(getOrders().filter(function (x) { return x.batchId !== batchId; }));
         renderTable();
+        return;
+    }
+
+    if (editBatchBtn) {
+        const batchId = editBatchBtn.dataset.editBatch;
+        const list = getOrders();
+        const batchItems = list.filter(function (x) { return x.batchId === batchId; });
+        if (batchItems.length === 0) return;
+
+        const currentNote = batchItems[0].note;
+        const newNote = prompt('แก้ไขหมายเหตุ:', currentNote);
+        if (newNote === null) return; // User cancelled
+
+        batchItems.forEach(function (item) {
+            item.note = newNote;
+        });
+        setOrders(list);
+        renderTable();
+        return;
+    }
+
+    if (addToBatchBtn) {
+        const batchId = addToBatchBtn.dataset.addToBatch;
+        const list = getOrders();
+        const batchItems = list.filter(function (x) { return x.batchId === batchId; });
+        if (batchItems.length === 0) return;
+
+        // Set edit-batch to indicate we're adding to existing batch
+        document.getElementById('edit-id').value = 'add-to-batch:' + batchId;
+        document.getElementById('order-type').value = batchItems[0].type;
+        document.getElementById('note').value = batchItems[0].note;
+        tempItems = [];
+
+        // Reset PIN boxes
+        const boxes = document.querySelectorAll('.pin-box-small');
+        if (boxes.length > 0) {
+            boxes.forEach(function (box) {
+                box.textContent = '';
+                box.classList.remove('filled', 'active');
+            });
+            boxes[0].classList.add('active');
+        }
+
+        renderTempItems();
+        showMenu('add');
+        return;
+    }
+
+    if (printBatchBtn) {
+        const batchId = printBatchBtn.dataset.printBatch;
+        printBatch(batchId);
         return;
     }
 

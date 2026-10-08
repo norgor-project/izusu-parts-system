@@ -60,6 +60,12 @@
                     <button type="button" class="tab-btn" data-tab="chang">
                         <i class="fa-solid fa-wrench me-2"></i>ช่าง
                     </button>
+                    <button type="button" class="tab-btn" data-tab="notes">
+                        <i class="fa-solid fa-sticky-note me-2"></i>โน๊ต
+                    </button>
+                    <button type="button" class="tab-btn" data-tab="alerts">
+                        <i class="fa-solid fa-bell me-2"></i>แจ้งเตือน
+                    </button>
                 </div>
             </div>
         </div>
@@ -223,6 +229,36 @@
                             <p id="empty-state" class="text-center text-muted py-5 mb-0 hidden" style="font-size:1rem;">ยังไม่มีรายการสั่งอะไหล่ของคนนี้</p>
                         </div>
                     </div>
+        </section>
+
+        <section id="view-notes" class="mt-4 hidden">
+            <div class="card-custom p-4 mb-3">
+                <h5 class="fw-bold mb-4">
+                    <i class="fa-solid fa-sticky-note me-2" style="color:var(--primary);"></i>
+                    เพิ่มโน๊ตใหม่
+                </h5>
+                <div class="mb-3">
+                    <textarea id="note-input" class="form-control" rows="4" placeholder="พิมพ์โน๊ตที่นี่..." style="border-radius:10px;padding:12px 16px;"></textarea>
+                </div>
+                <button type="button" class="btn btn-primary" id="btn-add-note">
+                    <i class="fa-solid fa-plus me-2"></i> เพิ่มโน๊ต
+                </button>
+            </div>
+            <div id="notes-container">
+                <p id="notes-empty" class="text-center text-muted py-5 mb-0" style="font-size:1rem;">ยังไม่มีโน๊ต</p>
+            </div>
+        </section>
+
+        <section id="view-alerts" class="mt-4 hidden">
+            <div class="card-custom p-4">
+                <h5 class="fw-bold mb-4">
+                    <i class="fa-solid fa-bell me-2" style="color:var(--primary);"></i>
+                    รายการที่มาส่งแล้ว
+                </h5>
+                <div id="alerts-container">
+                    <p id="alerts-empty" class="text-center text-muted py-5 mb-0" style="font-size:1rem;">ไม่มีรายการที่มาส่งแล้ว</p>
+                </div>
+            </div>
         </section>
     </div>
 

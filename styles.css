@@ -413,3 +413,125 @@ body {
     }
 }
 .hidden { display: none !important; }
+
+/* Print Styles */
+@media print {
+    * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
+    .app-header,
+    .tab-navigation,
+    .tab-btn,
+    .menu-card,
+    #menu-home,
+    #menu-add,
+    .btn,
+    .search-box,
+    #date-tabs,
+    .card-custom:not(.print-only),
+    .card-custom[data-print-batch] {
+        display: none !important;
+    }
+
+    body {
+        background: white !important;
+        color: black !important;
+        margin: 0 !important;
+        padding: 20px !important;
+    }
+
+    .container-fluid {
+        padding: 0 !important;
+    }
+
+    #view-person {
+        display: block !important;
+    }
+
+    #menu-list {
+        display: block !important;
+    }
+
+    .print-only {
+        display: block !important;
+        page-break-after: always;
+    }
+
+    .print-header {
+        text-align: center;
+        margin-bottom: 20px;
+        padding-bottom: 10px;
+        border-bottom: 2px solid #000;
+    }
+
+    .print-header h2 {
+        margin: 0;
+        font-size: 24px;
+    }
+
+    .print-header p {
+        margin: 5px 0;
+        font-size: 14px;
+    }
+
+    .print-table {
+        width: 100% !important;
+        border-collapse: collapse !important;
+        margin-top: 20px;
+        border: 2px solid #000 !important;
+        display: table !important;
+    }
+
+    .print-table thead {
+        display: table-header-group !important;
+    }
+
+    .print-table tbody {
+        display: table-row-group !important;
+    }
+
+    .print-table tr {
+        display: table-row !important;
+    }
+
+    .print-table th,
+    .print-table td {
+        border: 1px solid #000 !important;
+        padding: 10px 8px !important;
+        text-align: left;
+        vertical-align: middle;
+        display: table-cell !important;
+    }
+
+    .print-table th {
+        background: #f0f0f0 !important;
+        font-weight: bold;
+        font-size: 14px;
+        border-bottom: 2px solid #000 !important;
+    }
+
+    .print-table td {
+        font-size: 13px;
+    }
+
+    .print-table tr:nth-child(even) {
+        background: #fafafa !important;
+    }
+
+    .print-table .text-center {
+        text-align: center !important;
+    }
+
+    .print-table .text-right {
+        text-align: right !important;
+    }
+
+    .print-footer {
+        margin-top: 30px;
+        padding-top: 10px;
+        border-top: 1px solid #000;
+        font-size: 12px;
+    }
+}
