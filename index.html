@@ -11,6 +11,23 @@
 </head>
 <body data-person="tey">
 
+    <!-- Deadline Alerts Sidebar -->
+    <div id="deadline-alerts" class="deadline-alerts-sidebar hidden">
+        <div class="deadline-alerts-header">
+            <h6 class="fw-bold mb-0"><i class="fa-solid fa-bell me-2"></i>แจ้งเตือนครบกำหนด</h6>
+            <button class="btn btn-sm btn-close-alerts" id="btn-close-alerts">
+                <i class="fa-solid fa-times"></i>
+            </button>
+        </div>
+        <div id="deadline-alerts-list"></div>
+    </div>
+
+    <!-- Deadline Alert Toggle Button -->
+    <button class="deadline-alert-toggle hidden" id="btn-deadline-toggle">
+        <i class="fa-solid fa-bell"></i>
+        <span class="deadline-badge" id="deadline-badge">0</span>
+    </button>
+
     <header class="app-header d-flex justify-content-between align-items-center">
         <div class="d-flex align-items-center gap-3">
             <div class="logo-box">
@@ -65,6 +82,9 @@
                     </button>
                     <button type="button" class="tab-btn" data-tab="alerts">
                         <i class="fa-solid fa-bell me-2"></i>แจ้งเตือน
+                    </button>
+                    <button type="button" class="tab-btn" data-tab="deposit">
+                        <i class="fa-solid fa-money-bill-wave me-2"></i>มัดจำ
                     </button>
                 </div>
             </div>
@@ -146,7 +166,7 @@
                             <div class="card-custom p-3 mb-3" style="background:var(--bg-gray);">
                                 <h6 class="fw-bold mb-3" style="font-size:0.9rem;">เพิ่มรายการอะไหล่</h6>
                                 <div class="row g-2">
-                                    <div class="col-md-4">
+                                    <div class="col-md-3">
                                         <label class="form-label small fw-bold mb-1">เลขอะไหล่ (10 หลัก) *</label>
                                         <input type="text" id="temp-part-no" class="form-control form-control-sm" placeholder="กรอกเลขอะไหล่" required maxlength="10" style="display:none;">
                                         <div class="pin-boxes-small" id="temp-pin-boxes"></div>
@@ -157,13 +177,17 @@
                                             <i class="fa-solid fa-eraser me-1"></i> ล้าง
                                         </button>
                                     </div>
-                                    <div class="col-md-4">
+                                    <div class="col-md-3">
                                         <label class="form-label small fw-bold mb-1">ชื่ออะไหล่</label>
                                         <input type="text" id="temp-part-name" class="form-control form-control-sm" placeholder="ชื่ออะไหล่">
                                     </div>
                                     <div class="col-md-2">
                                         <label class="form-label small fw-bold mb-1">จำนวน *</label>
                                         <input type="number" id="temp-qty" class="form-control form-control-sm" value="1" min="1" required>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label small fw-bold mb-1">หมายเหตุอะไหล่</label>
+                                        <input type="text" id="temp-item-note" class="form-control form-control-sm" placeholder="เช่น สี/ขนาด">
                                     </div>
                                     <div class="col-md-2 d-flex align-items-end">
                                         <button type="button" class="btn btn-primary w-100" id="btn-add-item">
@@ -184,6 +208,7 @@
                                                 <th class="py-2">เลขอะไหล่</th>
                                                 <th class="py-2">ชื่ออะไหล่</th>
                                                 <th class="py-2 text-center">จำนวน</th>
+                                                <th class="py-2">หมายเหตุ</th>
                                                 <th class="py-2 text-center">จัดการ</th>
                                             </tr>
                                         </thead>
@@ -202,9 +227,13 @@
                                         <option value="urgent">สั่งด่วน</option>
                                     </select>
                                 </div>
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold" style="color:var(--text-gray);font-size:0.9rem;">หมายเลขทะเบียน</label>
+                                    <input type="text" id="license-plate" class="form-control" placeholder="เช่น กข-1234">
+                                </div>
                                 <div class="mb-4">
                                     <label class="form-label fw-bold" style="color:var(--text-gray);font-size:0.9rem;">หมายเหตุ</label>
-                                    <input type="text" id="note" class="form-control" placeholder="เช่น ทะเบียนรถ / รายละเอียด">
+                                    <input type="text" id="note" class="form-control" placeholder="เช่น รายละเอียดเพิ่มเติม">
                                 </div>
                                 <button type="button" class="btn btn-primary w-100 fw-bold py-3" id="btn-save">
                                     <span class="spinner"></span>
@@ -240,6 +269,16 @@
                 <div class="mb-3">
                     <textarea id="note-input" class="form-control" rows="4" placeholder="พิมพ์โน๊ตที่นี่..." style="border-radius:10px;padding:12px 16px;"></textarea>
                 </div>
+                <div class="row g-2 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold mb-1">วันที่แจ้งเตือน</label>
+                        <input type="date" id="note-alert-date" class="form-control">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold mb-1">เวลาแจ้งเตือน</label>
+                        <input type="time" id="note-alert-time" class="form-control">
+                    </div>
+                </div>
                 <button type="button" class="btn btn-primary" id="btn-add-note">
                     <i class="fa-solid fa-plus me-2"></i> เพิ่มโน๊ต
                 </button>
@@ -257,6 +296,146 @@
                 </h5>
                 <div id="alerts-container">
                     <p id="alerts-empty" class="text-center text-muted py-5 mb-0" style="font-size:1rem;">ไม่มีรายการที่มาส่งแล้ว</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="view-deposit" class="mt-4 hidden">
+            <div class="card-custom p-4 mb-3">
+                <div class="tab-navigation">
+                    <button type="button" class="tab-btn active" data-deposit-tab="new">
+                        <i class="fa-solid fa-plus me-2"></i>เพิ่มรายการมัดจำ
+                    </button>
+                    <button type="button" class="tab-btn" data-deposit-tab="history">
+                        <i class="fa-solid fa-history me-2"></i>ประวัติมัดจำ
+                    </button>
+                </div>
+            </div>
+
+            <div id="deposit-tab-new">
+                <div class="card-custom p-4 mb-3">
+                    <h5 class="fw-bold mb-4">
+                        <i class="fa-solid fa-money-bill-wave me-2" style="color:var(--primary);"></i>
+                        เพิ่มรายการมัดจำใหม่
+                    </h5>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold" style="color:var(--text-dark);font-size:1rem;font-weight:700;">
+                            <i class="fa-solid fa-user me-2" style="color:var(--primary);"></i>ชื่อลูกค้า *
+                        </label>
+                        <input type="text" id="deposit-customer" class="form-control" placeholder="ชื่อลูกค้า">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold" style="color:var(--text-dark);font-size:1rem;font-weight:700;">
+                            <i class="fa-solid fa-phone me-2" style="color:var(--primary);"></i>เบอร์ติดต่อ *
+                        </label>
+                        <input type="text" id="deposit-phone" class="form-control" placeholder="เบอร์โทรศัพท์">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold" style="color:var(--text-dark);font-size:1rem;font-weight:700;">
+                            <i class="fa-solid fa-calendar me-2" style="color:var(--primary);"></i>วันที่สั่งอะไหล่ *
+                        </label>
+                        <input type="date" id="deposit-order-date" class="form-control">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold" style="color:var(--text-dark);font-size:1rem;font-weight:700;">
+                            <i class="fa-solid fa-clock me-2" style="color:var(--primary);"></i>กำหนดรับของ *
+                        </label>
+                        <input type="date" id="deposit-expected-date" class="form-control">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold" style="color:var(--text-dark);font-size:1rem;font-weight:700;">
+                            <i class="fa-solid fa-money-bill-wave me-2" style="color:var(--primary);"></i>ยอดมัดจำ (บาท) *
+                        </label>
+                        <input type="number" id="deposit-amount" class="form-control" placeholder="0.00" step="0.01">
+                    </div>
+                </div>
+
+                <!-- Deposit Items -->
+                <div class="card-custom p-3 mb-3 mt-3" style="background:var(--bg-gray);">
+                    <h6 class="fw-bold mb-3" style="font-size:0.9rem;">รายการอะไหล่ที่สั่ง</h6>
+                    <div class="row g-2">
+                        <div class="col-md-2">
+                            <label class="form-label small fw-bold mb-1">เลขอะไหล่ (10 หลัก) *</label>
+                            <input type="text" id="deposit-part-no" class="form-control form-control-sm" placeholder="เลขอะไหล่" maxlength="10">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small fw-bold mb-1">ชื่ออะไหล่</label>
+                            <input type="text" id="deposit-part-name" class="form-control form-control-sm" placeholder="ชื่ออะไหล่">
+                        </div>
+                        <div class="col-md-1">
+                            <label class="form-label small fw-bold mb-1">จำนวน</label>
+                            <input type="number" id="deposit-part-qty" class="form-control form-control-sm" value="1" min="1">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small fw-bold mb-1">ราคา/หน่วย</label>
+                            <input type="number" id="deposit-part-price" class="form-control form-control-sm" placeholder="0.00" step="0.01">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small fw-bold mb-1">ราคารวม</label>
+                            <input type="text" id="deposit-part-total" class="form-control form-control-sm total-highlight" readonly placeholder="0.00">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small fw-bold mb-1">ราคาสุทธิ (+7%)</label>
+                            <input type="text" id="deposit-part-grand-total" class="form-control form-control-sm grand-total-highlight" readonly placeholder="0.00">
+                        </div>
+                        <div class="col-md-1 d-flex align-items-end">
+                            <button type="button" class="btn btn-primary w-100" id="btn-add-deposit-item">
+                                <i class="fa-solid fa-plus"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Temporary deposit items list -->
+                <div class="card-custom p-3 mb-3" id="deposit-items-container" style="display:none;">
+                    <h6 class="fw-bold mb-3" style="font-size:0.9rem;">รายการที่จะบันทึก (<span id="deposit-count">0</span> รายการ)</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead>
+                                <tr class="custom-table-header">
+                                    <th class="py-2 ps-2" style="width: 50px;">#</th>
+                                    <th class="py-2">เลขอะไหล่</th>
+                                    <th class="py-2">ชื่ออะไหล่</th>
+                                    <th class="py-2 text-center">จำนวน</th>
+                                    <th class="py-2 text-center">ราคา/หน่วย</th>
+                                    <th class="py-2 text-center">ราคารวม</th>
+                                    <th class="py-2 text-center">ราคาสุทธิ (+7%)</th>
+                                    <th class="py-2 text-center">จัดการ</th>
+                                </tr>
+                            </thead>
+                            <tbody id="deposit-items-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <button type="button" class="btn btn-primary mt-3" id="btn-add-deposit">
+                    <i class="fa-solid fa-plus me-2"></i> เพิ่มรายการมัดจำ
+                </button>
+                <button type="button" class="btn btn-secondary mt-3 ms-2" id="btn-print-deposit-form">
+                    <i class="fa-solid fa-print me-2"></i> พิมพ์ใบมัดจำ
+                </button>
+                <button type="button" class="btn btn-warning mt-3 ms-2" id="btn-test-deadline-alert">
+                    <i class="fa-solid fa-bell me-2"></i> ทดสอบแจ้งเตือน
+                </button>
+                <button type="button" class="btn btn-warning mt-3 ms-2 hidden" id="btn-cancel-edit-deposit">
+                    <i class="fa-solid fa-times me-2"></i> ยกเลิกแก้ไข
+                </button>
+            </div>
+            <div id="deposits-container">
+                <p id="deposits-empty" class="text-center text-muted py-5 mb-0" style="font-size:1rem;">ยังไม่มีรายการมัดจำ</p>
+            </div>
+            </div>
+
+            <div id="deposit-tab-history" class="hidden">
+                <div class="card-custom p-4">
+                    <h5 class="fw-bold mb-4">
+                        <i class="fa-solid fa-history me-2" style="color:var(--primary);"></i>
+                        ประวัติการมัดจำ (ลูกค้ามารับแล้ว)
+                    </h5>
+                    <div id="deposit-history-container">
+                        <p id="deposit-history-empty" class="text-center text-muted py-5 mb-0" style="font-size:1rem;">ยังไม่มีประวัติการมัดจำ</p>
+                    </div>
                 </div>
             </div>
         </section>
