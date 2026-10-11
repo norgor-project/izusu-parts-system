@@ -22,7 +22,8 @@ const PEOPLE = {
     flash: { name: 'พี่แฟลช' },
     oi: { name: 'พี่โอ' },
     bek: { name: 'พี่เบ็ก' },
-    chang: { name: 'ช่าง' }
+    chang: { name: 'ช่าง' },
+    customer: { name: 'สั่งของลูกค้า' }
 };
 
 // In-memory cache for orders
@@ -34,7 +35,8 @@ let ordersCache = {
     flash: [],
     oi: [],
     bek: [],
-    chang: []
+    chang: [],
+    customer: []
 };
 
 let currentPerson = 'tey';
@@ -42,7 +44,10 @@ let currentMenu = 'home';
 let tempItems = [];
 let depositItems = [];
 let editingDepositId = null;
+let editingItemId = null;
 let deadlineAlerts = [];
+let noteAlerts = [];
+let quickAddBatchId = null; // For quick add to batch
 
 function loadAll() {
     return ordersCache;
@@ -132,6 +137,7 @@ function showMenu(menu) {
 
 function openPerson(id) {
     try {
+        editingItemId = null;
         currentPerson = id;
         const name = PEOPLE[id].name;
         const headerSub = document.getElementById('header-sub');
@@ -173,11 +179,14 @@ function openPerson(id) {
         renderTempItems();
         updatePersonTabs();
 
-        // Show person view, hide search all view, notes view and alerts view
+        // Show person view, hide other views
         document.getElementById('view-search-all').classList.add('hidden');
         document.getElementById('view-notes').classList.add('hidden');
         document.getElementById('view-alerts').classList.add('hidden');
+        document.getElementById('view-due-alerts').classList.add('hidden');
         document.getElementById('view-deposit').classList.add('hidden');
+        const viewCal = document.getElementById('view-calendar');
+        if (viewCal) viewCal.classList.add('hidden');
         document.getElementById('view-person').classList.remove('hidden');
 
         // Add animation to logo
@@ -216,11 +225,14 @@ function showSearchAll() {
 
     updatePersonTabs();
 
-    // Show search all view, hide person view, notes view and alerts view
+    // Show search all view, hide other views
     document.getElementById('view-person').classList.add('hidden');
     document.getElementById('view-notes').classList.add('hidden');
     document.getElementById('view-alerts').classList.add('hidden');
+    document.getElementById('view-due-alerts').classList.add('hidden');
     document.getElementById('view-deposit').classList.add('hidden');
+    const viewCal = document.getElementById('view-calendar');
+    if (viewCal) viewCal.classList.add('hidden');
     document.getElementById('view-search-all').classList.remove('hidden');
     renderSearchAll();
 
@@ -238,17 +250,20 @@ function showNotes() {
     headerSub.classList.add('fade');
 
     setTimeout(function() {
-        headerSub.textContent = 'โน๊ตทั่วไป';
+        headerSub.textContent = 'สมุดบันทึกโน๊ต & การแจ้งเตือน';
         headerSub.classList.remove('fade');
     }, 150);
 
     updatePersonTabs();
 
-    // Show notes view, hide person view, search all view and alerts view
+    // Show notes view, hide other views
     document.getElementById('view-person').classList.add('hidden');
     document.getElementById('view-search-all').classList.add('hidden');
     document.getElementById('view-alerts').classList.add('hidden');
+    document.getElementById('view-due-alerts').classList.add('hidden');
     document.getElementById('view-deposit').classList.add('hidden');
+    const viewCal = document.getElementById('view-calendar');
+    if (viewCal) viewCal.classList.add('hidden');
     document.getElementById('view-notes').classList.remove('hidden');
 
     // Load notes from Firebase
@@ -274,11 +289,14 @@ function showAlerts() {
 
     updatePersonTabs();
 
-    // Show alerts view, hide person view, search all view and notes view
+    // Show alerts view, hide other views
     document.getElementById('view-person').classList.add('hidden');
     document.getElementById('view-search-all').classList.add('hidden');
     document.getElementById('view-notes').classList.add('hidden');
+    document.getElementById('view-due-alerts').classList.add('hidden');
     document.getElementById('view-deposit').classList.add('hidden');
+    const viewCal = document.getElementById('view-calendar');
+    if (viewCal) viewCal.classList.add('hidden');
     document.getElementById('view-alerts').classList.remove('hidden');
 
     // Load received items from Firebase
@@ -309,6 +327,9 @@ function showDeposit() {
     document.getElementById('view-search-all').classList.add('hidden');
     document.getElementById('view-notes').classList.add('hidden');
     document.getElementById('view-alerts').classList.add('hidden');
+    document.getElementById('view-due-alerts').classList.add('hidden');
+    const viewCal = document.getElementById('view-calendar');
+    if (viewCal) viewCal.classList.add('hidden');
     document.getElementById('view-deposit').classList.remove('hidden');
 
     // Reset to new tab
@@ -330,6 +351,78 @@ function showDeposit() {
     logoBox.classList.remove('pulse');
     void logoBox.offsetWidth;
     logoBox.classList.add('pulse');
+}
+
+function showDueAlerts() {
+    currentPerson = 'due-alerts';
+    const headerSub = document.getElementById('header-sub');
+
+    headerSub.classList.add('fade');
+
+    setTimeout(function() {
+        headerSub.textContent = 'รายการอะไหล่ที่ครบกำหนดวันแล้ว';
+        headerSub.classList.remove('fade');
+    }, 150);
+
+    updatePersonTabs();
+
+    // Show due alerts view, hide other views
+    document.getElementById('view-person').classList.add('hidden');
+    document.getElementById('view-search-all').classList.add('hidden');
+    document.getElementById('view-notes').classList.add('hidden');
+    document.getElementById('view-alerts').classList.add('hidden');
+    document.getElementById('view-deposit').classList.add('hidden');
+    const viewCal = document.getElementById('view-calendar');
+    if (viewCal) viewCal.classList.add('hidden');
+    document.getElementById('view-due-alerts').classList.remove('hidden');
+
+    // Load due items
+    loadDueAlerts();
+
+    // Add animation to logo
+    const logoBox = document.querySelector('.logo-box');
+    logoBox.classList.remove('pulse');
+    void logoBox.offsetWidth;
+    logoBox.classList.add('pulse');
+}
+
+function showCalendar() {
+    currentPerson = 'calendar';
+    const headerSub = document.getElementById('header-sub');
+
+    headerSub.classList.add('fade');
+
+    setTimeout(function() {
+        headerSub.textContent = 'ปฏิทินงาน & วันหยุดนักขัตฤกษ์';
+        headerSub.classList.remove('fade');
+    }, 150);
+
+    updatePersonTabs();
+
+    // Show calendar view, hide other views
+    document.getElementById('view-person').classList.add('hidden');
+    document.getElementById('view-search-all').classList.add('hidden');
+    document.getElementById('view-notes').classList.add('hidden');
+    document.getElementById('view-alerts').classList.add('hidden');
+    document.getElementById('view-due-alerts').classList.add('hidden');
+    document.getElementById('view-deposit').classList.add('hidden');
+    const viewCal = document.getElementById('view-calendar');
+    if (viewCal) viewCal.classList.remove('hidden');
+
+    // Init and render calendar
+    if (typeof initCalendarView === 'function') {
+        initCalendarView();
+    } else {
+        renderCalendar();
+    }
+
+    // Add animation to logo
+    const logoBox = document.querySelector('.logo-box');
+    if (logoBox) {
+        logoBox.classList.remove('pulse');
+        void logoBox.offsetWidth;
+        logoBox.classList.add('pulse');
+    }
 }
 
 function loadAlerts() {
@@ -495,52 +588,121 @@ function confirmReceivedBatch(batchId, personId) {
     });
 }
 
+let currentNoteFilter = 'all';
+let noteSearchQuery = '';
+let currentNotesCache = [];
+
+function renderNotesList() {
+    const container = document.getElementById('notes-container');
+    const empty = document.getElementById('notes-empty');
+    if (!container) return;
+
+    // Remove existing note cards (keep the empty element)
+    const cards = container.querySelectorAll('.note-item-card');
+    cards.forEach(card => card.remove());
+
+    // Update Quick Stats counters
+    const totalCount = currentNotesCache.length;
+    let pendingCount = 0;
+    let doneCount = 0;
+
+    currentNotesCache.forEach(function (note) {
+        if (note.alertDate && note.alertTime) {
+            if (note.alerted) {
+                doneCount++;
+            } else {
+                pendingCount++;
+            }
+        }
+    });
+
+    const totalEl = document.getElementById('notes-total-count');
+    const pendingEl = document.getElementById('notes-pending-count');
+    const doneEl = document.getElementById('notes-done-count');
+    if (totalEl) totalEl.textContent = totalCount;
+    if (pendingEl) pendingEl.textContent = pendingCount;
+    if (doneEl) doneEl.textContent = doneCount;
+
+    // Filter notes
+    const filtered = currentNotesCache.filter(function (note) {
+        // Search query filter
+        if (noteSearchQuery) {
+            const q = noteSearchQuery.toLowerCase();
+            const textMatch = (note.text || '').toLowerCase().includes(q);
+            const dateMatch = (note.date || '').includes(q);
+            const alertDateMatch = (note.alertDate || '').includes(q);
+            if (!textMatch && !dateMatch && !alertDateMatch) return false;
+        }
+
+        // Category filter
+        if (currentNoteFilter === 'alert') {
+            return !!(note.alertDate && note.alertTime);
+        } else if (currentNoteFilter === 'general') {
+            return !(note.alertDate && note.alertTime);
+        }
+        return true;
+    });
+
+    if (filtered.length === 0) {
+        if (empty) empty.classList.remove('hidden');
+        return;
+    }
+
+    if (empty) empty.classList.add('hidden');
+
+    filtered.forEach(function (note) {
+        const card = document.createElement('div');
+        const hasAlert = !!(note.alertDate && note.alertTime);
+        const isAlerted = !!note.alerted;
+
+        let statusClass = 'general-note';
+        if (hasAlert) {
+            statusClass = isAlerted ? 'alert-done' : 'has-alert';
+        }
+
+        card.className = 'note-item-card ' + statusClass;
+
+        let alertBadgeHtml = '';
+        if (hasAlert) {
+            if (isAlerted) {
+                alertBadgeHtml = '<span class="note-badge-alert-done"><i class="fa-solid fa-check-double"></i> แจ้งเตือนแล้ว (' + escapeHtml(note.alertDate) + ' ' + escapeHtml(note.alertTime) + ')</span>';
+            } else {
+                alertBadgeHtml = '<span class="note-badge-alert-pending"><i class="fa-solid fa-bell"></i> แจ้งเตือน ' + escapeHtml(note.alertDate) + ' ' + escapeHtml(note.alertTime) + '</span>';
+            }
+        }
+
+        card.innerHTML =
+            '<div class="d-flex justify-content-between align-items-center mb-2">' +
+                '<div class="note-item-meta">' +
+                    '<i class="fa-regular fa-calendar-check me-1"></i>' +
+                    '<span>' + escapeHtml(note.date || '') + ' ' + escapeHtml(note.time || '') + '</span>' +
+                '</div>' +
+                '<div class="d-flex gap-1">' +
+                    '<button type="button" class="btn-note-action" data-edit-note="' + note.id + '" title="แก้ไขโน๊ต">' +
+                        '<i class="fa-solid fa-pen-to-square"></i>' +
+                    '</button>' +
+                    '<button type="button" class="btn-note-action btn-delete" data-delete-note="' + note.id + '" title="ลบโน๊ต">' +
+                        '<i class="fa-solid fa-trash-can"></i>' +
+                    '</button>' +
+                '</div>' +
+            '</div>' +
+            '<div class="note-item-content">' + escapeHtml(note.text || '') + '</div>' +
+            (alertBadgeHtml ? '<div class="mt-2 pt-2 border-top d-flex justify-content-start">' + alertBadgeHtml + '</div>' : '');
+
+        container.appendChild(card);
+    });
+}
+
 function loadNotes() {
     database.ref('notes').on('value', function (snapshot) {
         const notes = snapshot.val();
-        const container = document.getElementById('notes-container');
-        const empty = document.getElementById('notes-empty');
-        container.innerHTML = '';
-        container.appendChild(empty);
-
-        if (!notes || Object.keys(notes).length === 0) {
-            empty.classList.remove('hidden');
-            return;
+        if (!notes) {
+            currentNotesCache = [];
+        } else {
+            // Sort by most recent first
+            currentNotesCache = Object.values(notes).reverse();
         }
-
-        empty.classList.add('hidden');
-
-        Object.values(notes).forEach(function (note) {
-            const card = document.createElement('div');
-            card.className = 'card-custom p-4 mb-3';
-
-            let alertInfo = '';
-            if (note.alertDate && note.alertTime) {
-                const isAlerted = note.alerted;
-                const alertBadge = isAlerted
-                    ? '<span class="badge rounded-pill" style="background:var(--success);color:white;"><i class="fa-solid fa-check me-1"></i>แจ้งเตือนแล้ว</span>'
-                    : '<span class="badge rounded-pill" style="background:var(--warning);color:white;"><i class="fa-solid fa-bell me-1"></i>แจ้งเตือน ' + note.alertDate + ' ' + note.alertTime + '</span>';
-                alertInfo = '<div class="mt-2">' + alertBadge + '</div>';
-            }
-
-            card.innerHTML =
-                '<div class="d-flex justify-content-between align-items-start">' +
-                '<div class="flex-grow-1">' +
-                '<p class="mb-2" style="white-space: pre-wrap;">' + escapeHtml(note.text) + '</p>' +
-                '<small class="text-muted">' + note.date + ' ' + note.time + '</small>' +
-                alertInfo +
-                '</div>' +
-                '<div class="d-flex gap-2">' +
-                '<button class="btn btn-sm btn-outline-secondary" data-edit-note="' + note.id + '">' +
-                '<i class="fa-solid fa-pen"></i>' +
-                '</button>' +
-                '<button class="btn btn-sm btn-outline-danger" data-delete-note="' + note.id + '">' +
-                '<i class="fa-solid fa-trash"></i>' +
-                '</button>' +
-                '</div>' +
-                '</div>';
-            container.appendChild(card);
-        });
+        renderNotesList();
     });
 }
 
@@ -661,65 +823,87 @@ function renderTable() {
     });
 
     Object.values(grouped).forEach(function (group) {
-        // Create group box
-        const groupBox = document.createElement('div');
-        groupBox.className = 'card-custom p-4 mb-3';
-
-        // Calculate total quantity in this group
+        // Calculate total quantity & delivery status in this group
         const totalQty = group.items.reduce(function (sum, item) {
             return sum + item.qty;
         }, 0);
+        const receivedCount = group.items.filter(function (item) {
+            return item.received;
+        }).length;
+        const allReceived = group.items.length > 0 && receivedCount === group.items.length;
+        const expectedDate = getExpectedDeliveryDate(group.date, group.type);
+        const isUrgent = group.type === 'urgent';
+
+        // Create group box container
+        const groupBox = document.createElement('div');
+        groupBox.className = 'order-group-card ' + (isUrgent ? 'border-urgent' : 'border-normal') + (allReceived ? ' all-received' : '');
 
         // Group header
         const header = document.createElement('div');
-        header.className = 'mb-3 pb-3';
-        header.style.borderBottom = '2px solid var(--border-color)';
+        header.className = 'order-group-header';
         header.innerHTML =
-            '<div class="d-flex justify-content-between align-items-center">' +
-            '<div>' +
-            '<h6 class="fw-bold mb-1">' +
-            '<i class="fa-solid fa-calendar me-2" style="color:var(--primary);"></i>' +
-            group.date + ' เวลา ' + group.time +
-            '</h6>' +
-            '<div class="text-muted small">' +
-            '<span class="' + (group.type === 'urgent' ? 'order-type-urgent' : 'order-type-normal') + '">' +
-            (group.type === 'urgent' ? 'สั่งด่วน' : 'สั่งปกติ') +
-            '</span>' +
-            (group.licensePlate ? ' <span class="ms-2"><i class="fa-solid fa-car me-1"></i>' + escapeHtml(group.licensePlate) + '</span>' : '') +
-            (group.note ? ' <span class="ms-2">- ' + escapeHtml(group.note) + '</span>' : '') +
+            '<div class="order-group-header-top">' +
+                '<div class="order-group-title-area">' +
+                    '<div class="order-group-title">' +
+                        '<i class="fa-solid fa-calendar-days text-primary"></i>' +
+                        '<span class="order-date-text">' + group.date + '</span>' +
+                        '<span class="order-time-text"><i class="fa-regular fa-clock me-1"></i>' + group.time + '</span>' +
+                    '</div>' +
+                    '<div class="order-group-tags">' +
+                        (isUrgent
+                            ? '<span class="order-tag-urgent"><i class="fa-solid fa-bolt me-1"></i>สั่งด่วน</span>'
+                            : '<span class="order-tag-normal"><i class="fa-solid fa-truck me-1"></i>สั่งปกติ</span>') +
+                        '<span class="order-tag-expected" title="วันที่คาดว่าจะได้รับของ"><i class="fa-solid fa-calendar-check me-1"></i>กำหนดส่ง: ' + expectedDate + '</span>' +
+                        (group.licensePlate
+                            ? '<span class="order-tag-plate"><i class="fa-solid fa-car-side me-1"></i>' + escapeHtml(group.licensePlate) + '</span>'
+                            : '') +
+                        (allReceived
+                            ? '<span class="order-tag-completed"><i class="fa-solid fa-circle-check me-1"></i>รับครบแล้ว</span>'
+                            : (receivedCount > 0
+                                ? '<span class="order-tag-partial"><i class="fa-solid fa-hourglass-half me-1"></i>รับแล้ว ' + receivedCount + '/' + group.items.length + '</span>'
+                                : '')) +
+                    '</div>' +
+                '</div>' +
+                '<div class="order-group-actions-area">' +
+                    '<span class="order-group-count-badge">' +
+                        '<i class="fa-solid fa-boxes-stacked me-1"></i>' + group.items.length + ' รายการ <span class="badge-qty-sep">•</span> ' + totalQty + ' ชิ้น' +
+                    '</span>' +
+                    '<div class="order-group-btn-group">' +
+                        '<button type="button" class="btn-group-action btn-group-add" data-add-to-batch="' + group.items[0].batchId + '" title="เพิ่มรายการอะไหล่ในชุดนี้">' +
+                            '<i class="fa-solid fa-plus me-1"></i>เพิ่มอะไหล่' +
+                        '</button>' +
+                        '<button type="button" class="btn-group-action btn-group-print" data-print-batch="' + group.items[0].batchId + '" title="พิมพ์ใบสั่งอะไหล่">' +
+                            '<i class="fa-solid fa-print me-1"></i>พิมพ์' +
+                        '</button>' +
+                        '<button type="button" class="btn-group-action btn-group-edit" data-edit-batch="' + group.items[0].batchId + '" title="แก้ไขข้อมูลชุดนี้">' +
+                            '<i class="fa-solid fa-pen-to-square"></i>' +
+                        '</button>' +
+                        '<button type="button" class="btn-group-action btn-group-delete" data-delete-batch="' + group.items[0].batchId + '" title="ลบทั้งชุดนี้">' +
+                            '<i class="fa-solid fa-trash-can"></i>' +
+                        '</button>' +
+                    '</div>' +
+                '</div>' +
             '</div>' +
-            '</div>' +
-            '<div class="d-flex gap-2 align-items-center">' +
-            '<span class="badge bg-secondary">' + group.items.length + ' รายการ (' + totalQty + ' ชิ้น)</span>' +
-            '<button class="btn btn-outline-secondary btn-sm" data-edit-batch="' + group.items[0].batchId + '" title="แก้ไขหมายเหตุ">' +
-            '<i class="fa-solid fa-pen"></i>' +
-            '</button>' +
-            '<button class="btn btn-outline-primary btn-sm" data-add-to-batch="' + group.items[0].batchId + '" title="เพิ่มรายการ">' +
-            '<i class="fa-solid fa-plus"></i>' +
-            '</button>' +
-            '<button class="btn btn-outline-success btn-sm" data-print-batch="' + group.items[0].batchId + '" title="พิมพ์">' +
-            '<i class="fa-solid fa-print"></i>' +
-            '</button>' +
-            '<button class="btn btn-outline-danger btn-sm" data-delete-batch="' + group.items[0].batchId + '" title="ลบทั้งกลุ่ม">' +
-            '<i class="fa-solid fa-trash"></i>' +
-            '</button>' +
-            '</div>' +
-            '</div>';
+            (group.note ? '<div class="order-group-note-banner"><i class="fa-solid fa-comment-dots text-primary me-2"></i><span class="note-label">หมายเหตุชุด:</span> ' + escapeHtml(group.note) + '</div>' : '');
+
         groupBox.appendChild(header);
 
         // Items table
+        const tableResponsive = document.createElement('div');
+        tableResponsive.className = 'table-responsive';
+
         const table = document.createElement('table');
-        table.className = 'table table-sm align-middle mb-0';
+        table.className = 'table table-sm align-middle mb-0 order-table';
         table.innerHTML =
             '<thead>' +
             '<tr class="custom-table-header">' +
-            '<th class="py-2 ps-2" style="width: 50px;">#</th>' +
+            '<th class="py-2 ps-3" style="width: 45px;">#</th>' +
             '<th class="py-2">หมายเลขอะไหล่</th>' +
             '<th class="py-2">ชื่ออะไหล่</th>' +
-            '<th class="py-2 text-center">จำนวน</th>' +
+            '<th class="py-2 text-center" style="width: 85px;">จำนวน</th>' +
             '<th class="py-2">หมายเหตุอะไหล่</th>' +
-            '<th class="py-2 text-center">สถานะ</th>' +
-            '<th class="py-2 text-center">จัดการ</th>' +
+            '<th class="py-2 text-center" style="width: 140px;">สถานะ</th>' +
+            '<th class="py-2 text-center" style="width: 125px;">จัดการ</th>' +
             '</tr>' +
             '</thead>' +
             '<tbody></tbody>';
@@ -728,31 +912,57 @@ function renderTable() {
         // Add items in this batch
         group.items.forEach(function (item, index) {
             const tr = document.createElement('tr');
-            const expectedDate = getExpectedDeliveryDate(item.date, item.type);
+            const expectedItemDate = getExpectedDeliveryDate(item.date, item.type);
             const isReceived = item.received;
             const statusBadge = isReceived
-                ? '<span class="badge rounded-pill" style="background:var(--success);color:white;"><i class="fa-solid fa-check me-1"></i>มาส่งแล้ว</span>'
-                : '<span class="badge rounded-pill" style="background:var(--warning);color:white;"><i class="fa-solid fa-clock me-1"></i>รอของ (' + expectedDate + ')</span>';
+                ? '<span class="status-badge-received"><i class="fa-solid fa-check me-1"></i>มาส่งแล้ว</span>'
+                : '<span class="status-badge-waiting"><i class="fa-solid fa-clock me-1"></i>รอของ (' + expectedItemDate + ')</span>';
 
-            tr.innerHTML =
-                '<td class="ps-2 fw-medium">' + (index + 1) + '</td>' +
-                '<td class="fw-bold text-primary">' + escapeHtml(item.partNo) + '</td>' +
-                '<td>' + escapeHtml(item.partName || '-') + '</td>' +
-                '<td class="text-center fw-bold">' + item.qty + '</td>' +
-                '<td class="text-muted small">' + escapeHtml(item.itemNote || '-') + '</td>' +
-                '<td class="text-center">' + statusBadge + '</td>' +
-                '<td class="text-center">' +
-                '<button class="btn btn-outline-success btn-action me-1" data-receive="' + item.id + '" title="ทำเครื่องหมายว่ามาส่งแล้ว"><i class="fa-solid fa-check"></i></button>' +
-                '<button class="btn btn-outline-secondary btn-action me-1" data-edit-item-note="' + item.id + '" title="แก้ไขหมายเหตุอะไหล่"><i class="fa-solid fa-note-sticky"></i></button>' +
-                '<button class="btn btn-outline-secondary btn-action me-1" data-edit="' + item.id + '"><i class="fa-solid fa-pen"></i></button>' +
-                '<button class="btn btn-outline-danger btn-action" data-del="' + item.id + '"><i class="fa-solid fa-trash"></i></button>' +
-                '</td>';
+            if (item.id === editingItemId) {
+                tr.className = 'table-light align-middle inline-edit-row';
+                tr.innerHTML =
+                    '<td class="ps-3 fw-medium text-muted">' + (index + 1) + '</td>' +
+                    '<td><input type="text" class="form-control form-control-sm fw-bold text-primary inline-edit-part-no" data-id="' + item.id + '" value="' + escapeHtml(item.partNo) + '" maxlength="10" placeholder="เลขอะไหล่ 10 หลัก" style="min-width: 130px;"></td>' +
+                    '<td><input type="text" class="form-control form-control-sm inline-edit-part-name" data-id="' + item.id + '" value="' + escapeHtml(item.partName || '') + '" placeholder="ชื่ออะไหล่" style="min-width: 140px;"></td>' +
+                    '<td class="text-center"><input type="number" class="form-control form-control-sm text-center mx-auto inline-edit-qty" data-id="' + item.id + '" value="' + item.qty + '" min="1" style="max-width: 75px;"></td>' +
+                    '<td><input type="text" class="form-control form-control-sm inline-edit-note" data-id="' + item.id + '" value="' + escapeHtml(item.itemNote || '') + '" placeholder="หมายเหตุอะไหล่" style="min-width: 120px;"></td>' +
+                    '<td class="text-center">' + statusBadge + '</td>' +
+                    '<td class="text-center text-nowrap">' +
+                    '<button class="btn btn-success btn-sm me-1 px-2 py-1" data-save-inline="' + item.id + '" title="บันทึกการแก้ไข"><i class="fa-solid fa-check me-1"></i>บันทึก</button>' +
+                    '<button class="btn btn-outline-secondary btn-sm px-2 py-1" data-cancel-inline="' + item.id + '" title="ยกเลิก"><i class="fa-solid fa-xmark"></i></button>' +
+                    '</td>';
+            } else {
+                tr.className = isReceived ? 'row-received' : '';
+                tr.innerHTML =
+                    '<td class="ps-3"><span class="row-index-circle">' + (index + 1) + '</span></td>' +
+                    '<td><span class="part-no-pill">' + escapeHtml(item.partNo) + '</span></td>' +
+                    '<td class="fw-medium text-dark">' + escapeHtml(item.partName || '-') + '</td>' +
+                    '<td class="text-center"><span class="qty-pill">' + item.qty + '</span></td>' +
+                    '<td>' + (item.itemNote ? '<span class="item-note-text"><i class="fa-solid fa-tag me-1 text-muted"></i>' + escapeHtml(item.itemNote) + '</span>' : '<span class="text-muted small">-</span>') + '</td>' +
+                    '<td class="text-center">' + statusBadge + '</td>' +
+                    '<td class="text-center">' +
+                    '<div class="btn-group-row-actions">' +
+                    '<button class="btn-row-action ' + (isReceived ? 'btn-row-uncheck' : 'btn-row-check') + '" data-receive="' + item.id + '" title="' + (isReceived ? 'ยกเลิกสถานะมาส่งแล้ว' : 'ทำเครื่องหมายว่ามาส่งแล้ว') + '"><i class="fa-solid fa-check"></i></button>' +
+                    '<button class="btn-row-action btn-row-edit" data-edit="' + item.id + '" title="แก้ไขรายการอะไหล่"><i class="fa-solid fa-pen"></i></button>' +
+                    '<button class="btn-row-action btn-row-del" data-del="' + item.id + '" title="ลบรายการนี้"><i class="fa-solid fa-trash"></i></button>' +
+                    '</div>' +
+                    '</td>';
+            }
             tbody.appendChild(tr);
         });
 
-        groupBox.appendChild(table);
+        tableResponsive.appendChild(table);
+        groupBox.appendChild(tableResponsive);
         container.appendChild(groupBox);
     });
+
+    if (editingItemId) {
+        const activeInput = container.querySelector('.inline-edit-part-no[data-id="' + editingItemId + '"]');
+        if (activeInput) {
+            activeInput.focus();
+            activeInput.select();
+        }
+    }
 }
 
 function escapeHtml(s) {
@@ -775,64 +985,149 @@ function printBatch(batchId) {
         items: batchItems
     };
 
+    // Determine the person name accurately
+    const personName = (batchItems[0].personName) || 
+                       (batchItems[0].person && PEOPLE[batchItems[0].person] && PEOPLE[batchItems[0].person].name) || 
+                       (PEOPLE[currentPerson] ? PEOPLE[currentPerson].name : 'ทั่วไป');
+
     const totalQty = group.items.reduce(function (sum, item) {
-        return sum + item.qty;
+        return sum + (Number(item.qty) || 0);
     }, 0);
+
+    const printDateTh = todayTh();
+    const printTime = getCurrentTime();
+    const isUrgent = group.type === 'urgent';
 
     // Create print HTML
     let printHTML = '<!DOCTYPE html><html><head><meta charset="UTF-8">';
-    printHTML += '<title>พิมพ์รายการสั่งอะไหล่</title>';
+    printHTML += '<title></title>';
     printHTML += '<style>';
-    printHTML += 'body { font-family: Arial, sans-serif; padding: 20px; margin: 0; }';
-    printHTML += '.header { text-align: center; margin-bottom: 25px; padding-bottom: 15px; border-bottom: 2px solid #000; }';
-    printHTML += '.header h2 { margin: 0; font-size: 28px; }';
-    printHTML += '.header p { margin: 8px 0; font-size: 16px; }';
-    printHTML += 'table { width: 100%; border-collapse: collapse; margin-top: 25px; border: 2px solid #000; }';
-    printHTML += 'th, td { border: 1px solid #000; padding: 12px 10px; text-align: left; }';
-    printHTML += 'th { background: #f0f0f0; font-weight: bold; font-size: 16px; border-bottom: 2px solid #000; }';
-    printHTML += 'td { font-size: 15px; }';
-    printHTML += 'tr:nth-child(even) { background: #fafafa; }';
-    printHTML += '.text-center { text-align: center; }';
-    printHTML += '.footer { margin-top: 35px; padding-top: 15px; border-top: 1px solid #000; font-size: 14px; }';
+    printHTML += '@import url("https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800;900&display=swap");';
+    printHTML += '@page { size: A4 portrait; margin: 0; }';
+    printHTML += '* { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }';
+    printHTML += 'html, body { margin: 0; padding: 0; background-color: #fff; }';
+    printHTML += 'body { font-family: "Sarabun", "Tahoma", sans-serif; color: #000; line-height: 1.45; font-size: 13.5px; }';
+    printHTML += '.doc-container { width: 100%; max-width: 100%; margin: 0 auto; padding: 12mm 15mm 12mm 15mm; background: #fff; }';
+    
+    // Header Table
+    printHTML += '.header-table { width: 100%; border-collapse: collapse; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 14px; }';
+    printHTML += '.header-title { font-size: 24px; font-weight: 800; color: #000; margin: 0; }';
+    printHTML += '.header-meta { text-align: right; font-size: 12.5px; color: #000; vertical-align: bottom; white-space: nowrap; }';
+    
+    // Requester Hero Card (Focus on WHOSE ORDER)
+    printHTML += '.requester-card { border: 2.5px solid #000; border-radius: 10px; background: #f8fafc; padding: 14px 20px; margin-bottom: 14px; }';
+    printHTML += '.requester-table { width: 100%; border-collapse: collapse; }';
+    printHTML += '.requester-label { font-size: 13px; font-weight: 700; color: #475569; letter-spacing: 0.5px; margin-bottom: 4px; }';
+    printHTML += '.requester-name { font-size: 30px; font-weight: 900; color: #000000; letter-spacing: 0.5px; line-height: 1.15; }';
+    printHTML += '.order-type-badge { display: inline-block; padding: 6px 16px; border-radius: 8px; font-size: 15px; font-weight: 800; text-align: center; letter-spacing: 0.5px; }';
+    printHTML += '.type-urgent { background: #fef2f2; color: #dc2626; border: 2px solid #dc2626; }';
+    printHTML += '.type-normal { background: #f0fdf4; color: #166534; border: 2px solid #16a34a; }';
+
+    // Order Info Card
+    printHTML += '.info-card { border: 1.5px solid #000; border-radius: 8px; background: #fff; padding: 10px 16px; margin-bottom: 16px; }';
+    printHTML += '.info-grid { width: 100%; border-collapse: collapse; }';
+    printHTML += '.info-grid td { padding: 5px 8px; vertical-align: middle; font-size: 13.5px; color: #000; }';
+    printHTML += '.info-label { font-weight: bold; color: #000; white-space: nowrap; width: 1%; padding-right: 8px; }';
+    printHTML += '.info-val { font-weight: bold; color: #000; }';
+    printHTML += '.plate-badge { display: inline-block; background: #fff; color: #000; font-weight: 800; padding: 2px 10px; border-radius: 6px; border: 1.5px solid #000; font-size: 13.5px; letter-spacing: 0.5px; }';
+
+    // Items Table (Rounded container & Full Grid Dividers)
+    printHTML += '.table-container { border: 1.5px solid #000; border-radius: 8px; overflow: hidden; margin-bottom: 16px; background: #fff; }';
+    printHTML += '.items-table { width: 100%; border-collapse: collapse; margin: 0; }';
+    printHTML += '.items-table th, .items-table td { border: 1px solid #000; }';
+    printHTML += '.items-table th { background: #e2e8f0; color: #000000 !important; font-weight: 800 !important; font-size: 16px; padding: 11px 10px; text-align: center; border-bottom: 2px solid #000; }';
+    printHTML += '.items-table td { padding: 11px 12px; color: #000; vertical-align: middle; }';
+
+    // Summary Box
+    printHTML += '.summary-container { border: 1.5px solid #000; border-radius: 8px; overflow: hidden; background: #f8fafc; padding: 12px 18px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; }';
+    printHTML += '.summary-text { font-size: 16px; font-weight: bold; color: #000; }';
+    printHTML += '.summary-qty { font-size: 18px; font-weight: 900; color: #000; }';
     printHTML += '</style>';
     printHTML += '</head><body>';
-    printHTML += '<div class="header">';
-    printHTML += '<h2>รายการสั่งอะไหล่</h2>';
-    printHTML += '<p><strong>ของ:</strong> ' + escapeHtml(PEOPLE[currentPerson].name) + '</p>';
-    printHTML += '<p><strong>วันที่:</strong> ' + group.date + ' <strong>เวลา:</strong> ' + group.time + '</p>';
-    if (group.type === 'urgent') {
-        printHTML += '<p><strong>ประเภท:</strong> <span style="color: #ff0000; font-weight: bold;">สั่งด่วน</span></p>';
+
+    printHTML += '<div class="doc-container">';
+
+    // Header Table (Clean & Official)
+    printHTML += '<table class="header-table">';
+    printHTML += '<tr>';
+    printHTML += '<td style="vertical-align: bottom;">';
+    printHTML += '<div class="header-title">ใบสั่งอะไหล่</div>';
+    printHTML += '</td>';
+    printHTML += '<td class="header-meta">';
+    printHTML += 'พิมพ์เมื่อ: <strong style="color: #000;">' + printDateTh + ' ' + printTime + '</strong>';
+    printHTML += '</td>';
+    printHTML += '</tr>';
+    printHTML += '</table>';
+
+    // Requester Hero Card (FOCUSED ON WHOSE ORDER)
+    printHTML += '<div class="requester-card">';
+    printHTML += '<table class="requester-table">';
+    printHTML += '<tr>';
+    printHTML += '<td>';
+    printHTML += '<div class="requester-label">รายการสั่งอะไหล่ของ:</div>';
+    printHTML += '<div class="requester-name">' + escapeHtml(personName) + '</div>';
+    printHTML += '</td>';
+    printHTML += '<td style="text-align: right; vertical-align: middle; width: 35%;"> ';
+    if (isUrgent) {
+        printHTML += '<div class="order-type-badge type-urgent">⚡ สั่งด่วน</div>';
     } else {
-        printHTML += '<p><strong>ประเภท:</strong> <span style="color: #008000; font-weight: bold;">สั่งปกติ</span></p>';
+        printHTML += '<div class="order-type-badge type-normal">📦 สั่งปกติ</div>';
     }
-    if (group.licensePlate) {
-        printHTML += '<p><strong>ทะเบียน:</strong> ' + escapeHtml(group.licensePlate) + '</p>';
-    }
-    if (group.note) {
-        printHTML += '<p><strong>หมายเหตุ:</strong> ' + escapeHtml(group.note) + '</p>';
-    }
+    printHTML += '</td>';
+    printHTML += '</tr>';
+    printHTML += '</table>';
     printHTML += '</div>';
-    printHTML += '<table>';
+
+    // Order Meta Info Card
+    printHTML += '<div class="info-card">';
+    printHTML += '<table class="info-grid">';
+    printHTML += '<tr>';
+    printHTML += '<td class="info-label">วันที่สั่ง:</td>';
+    printHTML += '<td class="info-val">' + escapeHtml(group.date || '-') + '</td>';
+    printHTML += '<td class="info-label" style="padding-left: 20px;">เวลาที่สั่ง:</td>';
+    printHTML += '<td class="info-val">' + escapeHtml(group.time || '-') + ' น.</td>';
+    if (group.licensePlate) {
+        printHTML += '<td class="info-label" style="padding-left: 20px;">ทะเบียนรถ:</td>';
+        printHTML += '<td class="info-val"><span class="plate-badge">' + escapeHtml(group.licensePlate) + '</span></td>';
+    }
+    printHTML += '</tr>';
+    if (group.note) {
+        printHTML += '<tr>';
+        printHTML += '<td class="info-label">หมายเหตุชุด:</td>';
+        printHTML += '<td class="info-val" colspan="' + (group.licensePlate ? '5' : '3') + '" style="color: #000;">' + escapeHtml(group.note) + '</td>';
+        printHTML += '</tr>';
+    }
+    printHTML += '</table>';
+    printHTML += '</div>';
+
+    // Items Table
+    printHTML += '<div class="table-container">';
+    printHTML += '<table class="items-table">';
     printHTML += '<thead><tr>';
-    printHTML += '<th style="width: 60px;">#</th>';
-    printHTML += '<th style="width: 120px;">หมายเลขอะไหล่</th>';
-    printHTML += '<th>ชื่ออะไหล่</th>';
-    printHTML += '<th style="width: 80px;" class="text-center">จำนวน</th>';
+    printHTML += '<th style="width: 55px; text-align: center;">#</th>';
+    printHTML += '<th style="width: 210px; text-align: center;">หมายเลขอะไหล่</th>';
+    printHTML += '<th style="text-align: left;">ชื่ออะไหล่</th>';
+    printHTML += '<th style="width: 95px; text-align: center;">จำนวน</th>';
     printHTML += '</tr></thead><tbody>';
 
     group.items.forEach(function (item, index) {
-        printHTML += '<tr>';
-        printHTML += '<td>' + (index + 1) + '</td>';
-        printHTML += '<td>' + escapeHtml(item.partNo) + '</td>';
-        printHTML += '<td>' + escapeHtml(item.partName || '-') + '</td>';
-        printHTML += '<td class="text-center">' + item.qty + '</td>';
+        const rowBg = index % 2 === 1 ? 'background-color: #f8fafc;' : 'background-color: #ffffff;';
+        printHTML += '<tr style="' + rowBg + '">';
+        printHTML += '<td style="text-align: center; font-weight: bold; font-size: 16px;">' + (index + 1) + '</td>';
+        printHTML += '<td style="font-family: monospace, Courier, sans-serif; font-size: 18px; font-weight: 800; letter-spacing: 0.8px; text-align: center;">' + escapeHtml(item.partNo) + '</td>';
+        printHTML += '<td style="text-align: left; font-weight: 600; font-size: 17px;">' + escapeHtml(item.partName || '-') + '</td>';
+        printHTML += '<td style="text-align: center; font-weight: 900; font-size: 20px;">' + item.qty + '</td>';
         printHTML += '</tr>';
     });
 
-    printHTML += '</tbody></table>';
-    printHTML += '<div class="footer">';
-    printHTML += '<p><strong>สรุป:</strong> ' + group.items.length + ' รายการ (' + totalQty + ' ชิ้น)</p>';
-    printHTML += '<p>พิมพ์เมื่อ: ' + todayTh() + ' ' + getCurrentTime() + '</p>';
+    printHTML += '</tbody></table></div>';
+
+    // Summary Box
+    printHTML += '<div class="summary-container">';
+    printHTML += '<div class="summary-text">สรุปยอดรวมรายการอะไหล่:</div>';
+    printHTML += '<div class="summary-qty">รวม ' + group.items.length + ' รายการ &nbsp;|&nbsp; ' + totalQty + ' ชิ้น</div>';
+    printHTML += '</div>';
+
     printHTML += '</div>';
     printHTML += '</body></html>';
 
@@ -859,6 +1154,9 @@ function printBatch(batchId) {
 
 document.querySelectorAll('.tab-btn[data-tab]').forEach(function (tab) {
     tab.addEventListener('click', function () {
+        if (typeof tab.scrollIntoView === 'function') {
+            tab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        }
         if (tab.dataset.tab === 'search-all') {
             showSearchAll();
         } else if (tab.dataset.tab === 'notes') {
@@ -867,6 +1165,10 @@ document.querySelectorAll('.tab-btn[data-tab]').forEach(function (tab) {
             showAlerts();
         } else if (tab.dataset.tab === 'deposit') {
             showDeposit();
+        } else if (tab.dataset.tab === 'due-alerts') {
+            showDueAlerts();
+        } else if (tab.dataset.tab === 'calendar') {
+            showCalendar();
         } else {
             openPerson(tab.dataset.tab);
         }
@@ -881,8 +1183,14 @@ document.querySelectorAll('#view-person .tab-btn').forEach(function (btn) {
 
 document.getElementById('btn-add-note').addEventListener('click', addNote);
 document.getElementById('btn-add-deposit').addEventListener('click', addDeposit);
-document.getElementById('btn-print-deposit-form').addEventListener('click', printDepositForm);
-document.getElementById('btn-test-deadline-alert').addEventListener('click', testDeadlineAlertUI);
+const btnPrintDepositForm = document.getElementById('btn-print-deposit-form');
+if (btnPrintDepositForm) {
+    btnPrintDepositForm.addEventListener('click', printDepositForm);
+}
+const btnTestDeadline = document.getElementById('btn-test-deadline-alert');
+if (btnTestDeadline) {
+    btnTestDeadline.addEventListener('click', testDeadlineAlertUI);
+}
 document.getElementById('btn-cancel-edit-deposit').addEventListener('click', clearDepositForm);
 document.getElementById('btn-close-alerts').addEventListener('click', function () {
     document.getElementById('deadline-alerts').classList.add('hidden');
@@ -939,7 +1247,8 @@ document.getElementById('view-deposit').addEventListener('click', function (e) {
                         '',
                         deposit.items,
                         deposit.createdAt,
-                        deposit.createdTime
+                        deposit.createdTime,
+                        deposit.licensePlate || ''
                     );
                 }
             });
@@ -1034,124 +1343,30 @@ document.getElementById('notes-container').addEventListener('click', function (e
 
 function updatePersonTabs() {
     document.querySelectorAll('.tab-btn[data-tab]').forEach(function (tab) {
+        let isActive = false;
         if (tab.dataset.tab === 'search-all') {
-            tab.classList.toggle('active', currentPerson === 'search-all');
+            isActive = (currentPerson === 'search-all');
         } else if (tab.dataset.tab === 'notes') {
-            tab.classList.toggle('active', currentPerson === 'notes');
+            isActive = (currentPerson === 'notes');
         } else if (tab.dataset.tab === 'alerts') {
-            tab.classList.toggle('active', currentPerson === 'alerts');
+            isActive = (currentPerson === 'alerts');
         } else if (tab.dataset.tab === 'deposit') {
-            tab.classList.toggle('active', currentPerson === 'deposit');
+            isActive = (currentPerson === 'deposit');
+        } else if (tab.dataset.tab === 'due-alerts') {
+            isActive = (currentPerson === 'due-alerts');
+        } else if (tab.dataset.tab === 'calendar') {
+            isActive = (currentPerson === 'calendar');
         } else {
-            tab.classList.toggle('active', tab.dataset.tab === currentPerson);
+            isActive = (tab.dataset.tab === currentPerson);
+        }
+        tab.classList.toggle('active', isActive);
+        if (isActive && typeof tab.scrollIntoView === 'function') {
+            tab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
         }
     });
 }
 
-// Small PIN Input Logic (for temp items)
-function initTempPinInput() {
-    console.log('Initializing PIN input...');
-    const pinBoxes = document.getElementById('temp-pin-boxes');
-    const hiddenInput = document.getElementById('temp-part-no-hidden');
-    const partNoInput = document.getElementById('temp-part-no');
-    const clearBtn = document.getElementById('btn-clear-temp-pin');
-    
-    console.log('Elements found:', { pinBoxes: !!pinBoxes, hiddenInput: !!hiddenInput, partNoInput: !!partNoInput, clearBtn: !!clearBtn });
-    
-    if (!pinBoxes || !hiddenInput) {
-        console.log('PIN elements not found, retrying...');
-        setTimeout(initTempPinInput, 200);
-        return;
-    }
-    
-    // Clear existing boxes if any
-    pinBoxes.innerHTML = '';
-    
-    // Create 10 PIN boxes
-    for (let i = 0; i < 10; i++) {
-        const box = document.createElement('div');
-        box.className = 'pin-box-small';
-        box.dataset.index = i;
-        pinBoxes.appendChild(box);
-    }
-    
-    const boxes = pinBoxes.querySelectorAll('.pin-box-small');
-    console.log('Created', boxes.length, 'PIN boxes');
-    
-    function updateBoxes() {
-        const value = hiddenInput.value.toUpperCase();
-        boxes.forEach(function (box, index) {
-            if (index < value.length) {
-                box.textContent = value[index];
-                box.classList.add('filled');
-            } else {
-                box.textContent = '';
-                box.classList.remove('filled');
-            }
-        });
-        
-        // Update active state
-        boxes.forEach(function (box) {
-            box.classList.remove('active');
-        });
-        if (value.length < 10) {
-            boxes[value.length].classList.add('active');
-        }
-        
-        // Sync with actual input
-        partNoInput.value = value;
-    }
-    
-    hiddenInput.addEventListener('input', function () {
-        // Allow any character, convert to uppercase
-        this.value = this.value.toUpperCase();
-        updateBoxes();
-    });
-    
-    hiddenInput.addEventListener('focus', function () {
-        updateBoxes();
-    });
-    
-    hiddenInput.addEventListener('blur', function () {
-        boxes.forEach(function (box) {
-            box.classList.remove('active');
-        });
-    });
-    
-    // Click on boxes to focus hidden input
-    pinBoxes.addEventListener('click', function () {
-        hiddenInput.focus();
-    });
-    
-    // Clear button
-    if (clearBtn) {
-        clearBtn.addEventListener('click', function () {
-            hiddenInput.value = '';
-            partNoInput.value = '';
-            boxes.forEach(function (box) {
-                box.textContent = '';
-                box.classList.remove('filled', 'active');
-            });
-            boxes[0].classList.add('active');
-            hiddenInput.focus();
-        });
-    }
-    
-    console.log('PIN input initialized successfully');
-}
-
-// Initialize PIN input after DOM is ready
-function initWhenReady() {
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('DOM loaded, initializing PIN input...');
-            setTimeout(initTempPinInput, 200);
-        });
-    } else {
-        console.log('DOM already ready, initializing PIN input...');
-        setTimeout(initTempPinInput, 200);
-    }
-}
+// PIN Input Logic is now in HTML to avoid duplicate initialization
 
 // Load data from Firebase on startup
 function loadFromFirebase() {
@@ -1176,7 +1391,8 @@ function loadFromFirebase() {
                 flash: [],
                 oi: [],
                 bek: [],
-                chang: []
+                chang: [],
+                customer: []
             };
         }
         console.log('Data loaded from Firebase:', ordersCache);
@@ -1187,9 +1403,100 @@ function loadFromFirebase() {
         if (currentPerson === 'search-all') {
             renderSearchAll();
         }
+        if (currentPerson === 'due-alerts') {
+            loadDueAlerts();
+        }
+        updateDueBadge();
     }, function(error) {
         console.error('Error loading from Firebase:', error);
         alert('เกิดข้อผิดพลาดในการโหลดข้อมูล: ' + error.message);
+    });
+}
+
+function initNoteInteractions() {
+    // Quick Tag Chips
+    document.querySelectorAll('.note-tag-chip').forEach(function (chip) {
+        chip.addEventListener('click', function () {
+            const tag = this.dataset.tag;
+            const textarea = document.getElementById('note-input');
+            if (!textarea) return;
+            const cur = textarea.value;
+            if (cur.trim().length === 0) {
+                textarea.value = tag + ' ';
+            } else {
+                textarea.value = cur.trimEnd() + '\n' + tag + ' ';
+            }
+            textarea.focus();
+        });
+    });
+
+    // Preset buttons for alert time
+    document.querySelectorAll('.note-preset-btn[data-preset]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            const preset = this.dataset.preset;
+            const dateInput = document.getElementById('note-alert-date');
+            const timeInput = document.getElementById('note-alert-time');
+            if (!dateInput || !timeInput) return;
+
+            const d = new Date();
+            d.setDate(d.getDate() + 1);
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            dateInput.value = y + '-' + m + '-' + day;
+
+            if (preset === 'tomorrow-morning') {
+                timeInput.value = '09:00';
+            } else if (preset === 'tomorrow-afternoon') {
+                timeInput.value = '13:30';
+            }
+        });
+    });
+
+    // Clear alert time button
+    const clearAlertBtn = document.getElementById('btn-clear-note-alert-time');
+    if (clearAlertBtn) {
+        clearAlertBtn.addEventListener('click', function () {
+            const dateInput = document.getElementById('note-alert-date');
+            const timeInput = document.getElementById('note-alert-time');
+            if (dateInput) dateInput.value = '';
+            if (timeInput) timeInput.value = '';
+        });
+    }
+
+    // Search Notes input
+    const searchInput = document.getElementById('note-search-input');
+    const clearSearchBtn = document.getElementById('btn-clear-note-search');
+    if (searchInput) {
+        searchInput.addEventListener('input', function () {
+            noteSearchQuery = this.value.trim();
+            if (clearSearchBtn) {
+                clearSearchBtn.classList.toggle('hidden', !noteSearchQuery);
+            }
+            renderNotesList();
+        });
+    }
+
+    if (clearSearchBtn) {
+        clearSearchBtn.addEventListener('click', function () {
+            if (searchInput) {
+                searchInput.value = '';
+                noteSearchQuery = '';
+                this.classList.add('hidden');
+                renderNotesList();
+                searchInput.focus();
+            }
+        });
+    }
+
+    // Filter note categories
+    document.querySelectorAll('.btn-filter-note').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            document.querySelectorAll('.btn-filter-note').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            currentNoteFilter = this.dataset.noteFilter;
+            renderNotesList();
+        });
     });
 }
 
@@ -1201,16 +1508,27 @@ function initApp() {
             loadFromFirebase();
             openPerson('tey');
             checkDeadlineAlerts();
+            checkNoteAlerts();
+            setupNoteAlertsListeners();
+            setupDueAlertsListeners();
+            updateDueBadge();
+            initNoteInteractions();
+            initCalendarView();
         });
     } else {
         console.log('DOM already ready, initializing app...');
         loadFromFirebase();
         openPerson('tey');
         checkDeadlineAlerts();
+        checkNoteAlerts();
+        setupNoteAlertsListeners();
+        setupDueAlertsListeners();
+        updateDueBadge();
+        initNoteInteractions();
+        initCalendarView();
     }
 }
 
-initWhenReady();
 initApp();
 
 // Check for note alerts every 30 seconds
@@ -1294,6 +1612,7 @@ function updateDeadlineAlertsUI() {
         alertItem.innerHTML =
             '<div class="deadline-alert-customer">' +
             '<i class="fa-solid fa-user me-2"></i>' + escapeHtml(deposit.customer) +
+            (deposit.licensePlate ? ' <span class="badge bg-light text-dark border ms-1"><i class="fa-solid fa-car me-1 text-primary"></i>' + escapeHtml(deposit.licensePlate) + '</span>' : '') +
             '</div>' +
             '<div class="deadline-alert-date">' +
             '<i class="fa-solid fa-phone me-1"></i>' + escapeHtml(deposit.phone) +
@@ -1431,9 +1750,10 @@ function loadDepositHistory() {
                 historyDiv.style.borderRadius = '8px';
                 historyDiv.innerHTML =
                     '<div class="d-flex justify-content-between align-items-center mb-2">' +
-                    '<div>' +
+                    '<div class="d-flex align-items-center flex-wrap gap-2">' +
                     '<small class="text-muted"><i class="fa-solid fa-calendar me-1"></i>สั่ง: ' + deposit.orderDate + '</small>' +
-                    '<small class="text-muted ms-3"><i class="fa-solid fa-clock me-1"></i>รับ: ' + deposit.expectedDate + '</small>' +
+                    '<small class="text-muted ms-2"><i class="fa-solid fa-clock me-1"></i>รับ: ' + deposit.expectedDate + '</small>' +
+                    (deposit.licensePlate ? '<span class="badge bg-light text-dark border ms-2"><i class="fa-solid fa-car me-1 text-success"></i>' + escapeHtml(deposit.licensePlate) + '</span>' : '') +
                     '</div>' +
                     '<div>' +
                     '<span class="badge bg-success">มัดจำ: ' + deposit.amount.toLocaleString() + ' บาท</span>' +
@@ -1507,42 +1827,128 @@ function dismissDeadlineAlert(depositId) {
 function checkNoteAlerts() {
     database.ref('notes').once('value').then(function (snapshot) {
         const notes = snapshot.val();
-        if (!notes) return;
+        if (!notes) {
+            noteAlerts = [];
+            updateNoteAlertsUI();
+            return;
+        }
 
         const now = new Date();
-        const alertsToTrigger = [];
+        noteAlerts = [];
 
         Object.values(notes).forEach(function (note) {
             if (note.alertDate && note.alertTime && !note.alerted) {
                 const alertDateTime = new Date(note.alertDate + 'T' + note.alertTime);
                 if (now >= alertDateTime) {
-                    alertsToTrigger.push(note);
+                    noteAlerts.push(note);
                 }
             }
         });
 
-        if (alertsToTrigger.length > 0) {
-            alertsToTrigger.forEach(function (note) {
-                // Show alert
-                alert('🔔 แจ้งเตือนโน๊ต:\n\n' + note.text);
-
-                // Mark as alerted
-                database.ref('notes/' + note.id).update({
-                    alerted: true
-                }).catch(function (error) {
-                    console.error('Error updating note alert status:', error);
-                });
-            });
-        }
+        updateNoteAlertsUI();
     }).catch(function (error) {
         console.error('Error checking note alerts:', error);
     });
+}
+
+function updateNoteAlertsUI() {
+    var toggleBtn = document.getElementById('btn-note-toggle');
+    var sidebar = document.getElementById('note-alerts');
+    var list = document.getElementById('note-alerts-list');
+    var badge = document.getElementById('note-alert-badge');
+
+    if (!toggleBtn || !list || !badge) return;
+
+    list.innerHTML = '';
+
+    if (noteAlerts.length === 0) {
+        toggleBtn.classList.add('hidden');
+        sidebar.classList.add('hidden');
+        return;
+    }
+
+    toggleBtn.classList.remove('hidden');
+    badge.textContent = noteAlerts.length;
+
+    noteAlerts.forEach(function (note) {
+        var alertItem = document.createElement('div');
+        alertItem.className = 'note-alert-item';
+
+        var alertDateStr = note.alertDate + ' ' + note.alertTime;
+
+        alertItem.innerHTML =
+            '<div class="note-alert-text">' +
+            '<i class="fa-solid fa-sticky-note me-2"></i>' + escapeHtml(note.text) +
+            '</div>' +
+            '<div class="note-alert-date">' +
+            '<span style="color:#ef4444;font-weight:600;font-size:0.8rem;"><i class="fa-solid fa-exclamation-circle me-1"></i>ถึงเวลาแจ้งเตือนแล้ว!</span>' +
+            '<span class="ms-3"><i class="fa-solid fa-clock me-1"></i>' + alertDateStr + '</span>' +
+            '</div>' +
+            '<div class="note-alert-actions">' +
+            '<button class="btn btn-success btn-sm" data-note-dismiss="' + note.id + '">' +
+            '<i class="fa-solid fa-check me-1"></i>รับทราบ' +
+            '</button>' +
+            '<button class="btn btn-outline-secondary btn-sm" data-note-goto="' + note.id + '">' +
+            '<i class="fa-solid fa-arrow-right me-1"></i>ไปที่โน๊ต' +
+            '</button>' +
+            '</div>';
+        list.appendChild(alertItem);
+    });
+
+    // Add event listeners
+    list.querySelectorAll('[data-note-dismiss]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            markNoteAlerted(btn.dataset.noteDismiss);
+        });
+    });
+
+    list.querySelectorAll('[data-note-goto]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            // Close sidebar and go to notes tab
+            document.getElementById('note-alerts').classList.add('hidden');
+            // Switch to notes tab
+            var notesTab = document.querySelector('[data-tab="notes"]');
+            if (notesTab) notesTab.click();
+        });
+    });
+}
+
+function markNoteAlerted(noteId) {
+    database.ref('notes/' + noteId).update({
+        alerted: true
+    }).then(function () {
+        noteAlerts = noteAlerts.filter(function (n) { return n.id !== noteId; });
+        updateNoteAlertsUI();
+    }).catch(function (error) {
+        console.error('Error marking note as alerted:', error);
+        alert('เกิดข้อผิดพลาด: ' + error.message);
+    });
+}
+
+function setupNoteAlertsListeners() {
+    // Toggle button
+    var toggleBtn = document.getElementById('btn-note-toggle');
+    if (toggleBtn) {
+        toggleBtn.addEventListener('click', function () {
+            var sidebar = document.getElementById('note-alerts');
+            sidebar.classList.toggle('hidden');
+        });
+    }
+
+    // Close button
+    var closeBtn = document.getElementById('btn-close-note-alerts');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', function () {
+            document.getElementById('note-alerts').classList.add('hidden');
+        });
+    }
 }
 
 // Deposit Functions
 function addDeposit() {
     const customer = document.getElementById('deposit-customer').value.trim();
     const phone = document.getElementById('deposit-phone').value.trim();
+    const licensePlate = document.getElementById('deposit-license-plate').value.trim();
     const orderDate = document.getElementById('deposit-order-date').value;
     const expectedDate = document.getElementById('deposit-expected-date').value;
     const amount = Number(document.getElementById('deposit-amount').value);
@@ -1577,6 +1983,7 @@ function addDeposit() {
         database.ref('deposits/' + editingDepositId).update({
             customer: customer,
             phone: phone,
+            licensePlate: licensePlate,
             orderDate: orderDate,
             expectedDate: expectedDate,
             amount: amount,
@@ -1595,6 +2002,7 @@ function addDeposit() {
             id: depositId,
             customer: customer,
             phone: phone,
+            licensePlate: licensePlate,
             orderDate: orderDate,
             expectedDate: expectedDate,
             amount: amount,
@@ -1617,6 +2025,7 @@ function addDeposit() {
 function clearDepositForm() {
     document.getElementById('deposit-customer').value = '';
     document.getElementById('deposit-phone').value = '';
+    document.getElementById('deposit-license-plate').value = '';
     document.getElementById('deposit-order-date').value = new Date().toISOString().split('T')[0];
     document.getElementById('deposit-expected-date').value = '';
     document.getElementById('deposit-amount').value = '';
@@ -1638,6 +2047,7 @@ function loadDepositToForm(depositId) {
 
         document.getElementById('deposit-customer').value = deposit.customer;
         document.getElementById('deposit-phone').value = deposit.phone;
+        document.getElementById('deposit-license-plate').value = deposit.licensePlate || '';
         document.getElementById('deposit-order-date').value = deposit.orderDate;
         document.getElementById('deposit-expected-date').value = deposit.expectedDate;
         document.getElementById('deposit-amount').value = deposit.amount;
@@ -1826,9 +2236,10 @@ function loadDeposits() {
                 depositDiv.dataset.depositCard = deposit.id;
                 depositDiv.innerHTML =
                     '<div class="d-flex justify-content-between align-items-center mb-2">' +
-                    '<div>' +
+                    '<div class="d-flex align-items-center flex-wrap gap-2">' +
                     '<small class="text-muted"><i class="fa-solid fa-calendar me-1"></i>สั่ง: ' + deposit.orderDate + '</small>' +
-                    '<small class="text-muted ms-3"><i class="fa-solid fa-clock me-1"></i>รับ: ' + deposit.expectedDate + '</small>' +
+                    '<small class="text-muted ms-2"><i class="fa-solid fa-clock me-1"></i>รับ: ' + deposit.expectedDate + '</small>' +
+                    (deposit.licensePlate ? '<span class="badge bg-light text-dark border ms-2"><i class="fa-solid fa-car me-1 text-primary"></i>' + escapeHtml(deposit.licensePlate) + '</span>' : '') +
                     '</div>' +
                     '</div>' +
                     '<small class="text-muted">บันทึกเมื่อ: ' + deposit.createdAt + ' ' + deposit.createdTime + '</small>' +
@@ -1866,6 +2277,7 @@ function deleteDeposit(depositId) {
 function printDepositForm() {
     const customer = document.getElementById('deposit-customer').value.trim();
     const phone = document.getElementById('deposit-phone').value.trim();
+    const licensePlate = document.getElementById('deposit-license-plate').value.trim();
     const orderDate = document.getElementById('deposit-order-date').value;
     const expectedDate = document.getElementById('deposit-expected-date').value;
     const amount = Number(document.getElementById('deposit-amount').value);
@@ -1875,7 +2287,7 @@ function printDepositForm() {
         return;
     }
 
-    printDepositHTML(customer, phone, orderDate, expectedDate, amount, '', depositItems, todayTh(), getCurrentTime());
+    printDepositHTML(customer, phone, orderDate, expectedDate, amount, '', depositItems, todayTh(), getCurrentTime(), licensePlate);
 }
 
 function printDeposit(depositId) {
@@ -1892,7 +2304,8 @@ function printDeposit(depositId) {
             deposit.note,
             deposit.items,
             deposit.createdAt,
-            deposit.createdTime
+            deposit.createdTime,
+            deposit.licensePlate || ''
         );
     }).catch(function (error) {
         console.error('Error loading deposit:', error);
@@ -1900,7 +2313,7 @@ function printDeposit(depositId) {
     });
 }
 
-function printDepositHTML(customer, phone, orderDate, expectedDate, amount, note, items, createdAt, createdTime) {
+function printDepositHTML(customer, phone, orderDate, expectedDate, amount, note, items, createdAt, createdTime, licensePlate) {
     // Convert dates to Thai format
     function formatDateToThai(dateStr) {
         if (!dateStr) return '-';
@@ -1911,6 +2324,8 @@ function printDepositHTML(customer, phone, orderDate, expectedDate, amount, note
 
     const orderDateTh = formatDateToThai(orderDate);
     const expectedDateTh = formatDateToThai(expectedDate);
+    const printDateTh = todayTh();
+    const printTime = getCurrentTime();
 
     // Calculate totals
     let itemsTotal = 0;
@@ -1918,15 +2333,14 @@ function printDepositHTML(customer, phone, orderDate, expectedDate, amount, note
     let itemsHtml = '';
 
     if (items && items.length > 0) {
-        itemsHtml = '<table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 14px;">';
-        itemsHtml += '<thead><tr style="background-color: #f2f2f2;">';
-        itemsHtml += '<th style="border: 1px solid #ddd; padding: 10px; text-align: center; width: 8%;">ลำดับ</th>';
-        itemsHtml += '<th style="border: 1px solid #ddd; padding: 10px; text-align: center; width: 25%;">เบอร์อะไหล่</th>';
-        itemsHtml += '<th style="border: 1px solid #ddd; padding: 10px; text-align: left; width: 25%;">ชื่ออะไหล่</th>';
-        itemsHtml += '<th style="border: 1px solid #ddd; padding: 10px; text-align: center; width: 10%;">จำนวน</th>';
-        itemsHtml += '<th style="border: 1px solid #ddd; padding: 10px; text-align: center; width: 14%;">ราคา/หน่วย</th>';
-        itemsHtml += '<th style="border: 1px solid #ddd; padding: 10px; text-align: center; width: 18%;">ราคารวม</th>';
-        itemsHtml += '<th style="border: 1px solid #ddd; padding: 10px; text-align: center; width: 18%;">ราคาสุทธิ</th>';
+        itemsHtml = '<div class="table-container"><table class="items-table">';
+        itemsHtml += '<thead><tr>';
+        itemsHtml += '<th style="border: 1px solid #000; color: #000000; font-weight: 800; font-size: 14px; width: 6%;">ลำดับ</th>';
+        itemsHtml += '<th style="border: 1px solid #000; color: #000000; font-weight: 800; font-size: 14px; width: 22%;">หมายเลขอะไหล่</th>';
+        itemsHtml += '<th style="border: 1px solid #000; color: #000000; font-weight: 800; font-size: 14px; width: 28%; text-align: left;">ชื่ออะไหล่ / รายละเอียด</th>';
+        itemsHtml += '<th style="border: 1px solid #000; color: #000000; font-weight: 800; font-size: 14px; width: 9%;">จำนวน</th>';
+        itemsHtml += '<th style="border: 1px solid #000; color: #000000; font-weight: 800; font-size: 14px; width: 15%; text-align: right;">ราคา/หน่วย</th>';
+        itemsHtml += '<th style="border: 1px solid #000; color: #000000; font-weight: 800; font-size: 14px; width: 20%; text-align: right;">ราคาสุทธิ</th>';
         itemsHtml += '</tr></thead><tbody>';
 
         items.forEach(function (item, index) {
@@ -1935,119 +2349,193 @@ function printDepositHTML(customer, phone, orderDate, expectedDate, amount, note
             itemsTotal += total;
             itemsGrandTotal += grandTotal;
 
-            itemsHtml += '<tr>';
-            itemsHtml += '<td style="border: 1px solid #ddd; padding: 10px; text-align: center;">' + (index + 1) + '</td>';
-            itemsHtml += '<td style="border: 1px solid #ddd; padding: 10px; text-align: center;">' + escapeHtml(item.partNo) + '</td>';
-            itemsHtml += '<td style="border: 1px solid #ddd; padding: 10px; text-align: left;">' + escapeHtml(item.partName || '-') + '</td>';
-            itemsHtml += '<td style="border: 1px solid #ddd; padding: 10px; text-align: center;">' + item.qty + '</td>';
-            itemsHtml += '<td style="border: 1px solid #ddd; padding: 10px; text-align: right;">' + item.price.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + '</td>';
-            itemsHtml += '<td style="border: 1px solid #ddd; padding: 10px; text-align: right;">' + total.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + '</td>';
-            itemsHtml += '<td style="border: 1px solid #ddd; padding: 10px; text-align: right; font-weight: bold; color: #0275d8;">' + grandTotal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + '</td>';
+            const rowBg = index % 2 === 1 ? 'background-color: #f8fafc;' : 'background-color: #ffffff;';
+            itemsHtml += '<tr style="' + rowBg + '">';
+            itemsHtml += '<td style="border: 1px solid #000; text-align: center; color: #000; font-weight: bold;">' + (index + 1) + '</td>';
+            itemsHtml += '<td style="border: 1px solid #000; font-family: monospace; font-size: 13.5px; font-weight: bold; color: #000; letter-spacing: 0.5px;">' + escapeHtml(item.partNo) + '</td>';
+            itemsHtml += '<td style="border: 1px solid #000; text-align: left; font-weight: 500; color: #000;">' + escapeHtml(item.partName || '-') + (item.itemNote ? ' <span style="font-size: 12px; color: #000;">(' + escapeHtml(item.itemNote) + ')</span>' : '') + '</td>';
+            itemsHtml += '<td style="border: 1px solid #000; text-align: center; font-weight: bold; color: #000;">' + item.qty + '</td>';
+            itemsHtml += '<td style="border: 1px solid #000; text-align: right; color: #000;">' + item.price.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + '</td>';
+            itemsHtml += '<td style="border: 1px solid #000; text-align: right; font-weight: bold; color: #000;">' + grandTotal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + '</td>';
             itemsHtml += '</tr>';
         });
 
-        itemsHtml += '</tbody></table>';
+        itemsHtml += '</tbody></table></div>';
     }
 
     const vatAmount = itemsTotal * 0.07;
-    const remainingAmount = itemsGrandTotal - amount;
+    const finalAmount = itemsGrandTotal > 0 ? itemsGrandTotal : amount;
+    const remainingAmount = finalAmount - amount;
 
     // Create print HTML
     let printHTML = '<!DOCTYPE html><html><head><meta charset="UTF-8">';
-    printHTML += '<title>ใบรับมัดจำอะไหล่</title>';
+    printHTML += '<title></title>';
     printHTML += '<style>';
-    printHTML += '@page { margin: 8mm; size: A4; }';
-    printHTML += 'body { font-family: "Tahoma", "Sarabun", sans-serif; background-color: #fff; margin: 0; padding: 0; color: #000; }';
-    printHTML += '.invoice-box { max-width: 100%; margin: auto; background: #fff; padding: 10px; }';
-    printHTML += '.header { text-align: center; margin-bottom: 15px; border-bottom: 2px solid #000; padding-bottom: 10px; }';
-    printHTML += '.header h2 { margin: 0 0 5px 0; font-size: 22px; font-weight: bold; }';
-    printHTML += '.header p { margin: 0; font-size: 14px; font-weight: bold; }';
-    printHTML += '.info-box { border: 1px solid #000; background-color: #f9f9f9; padding: 15px; border-radius: 6px; margin-bottom: 15px; font-size: 14px; }';
-    printHTML += '.info-row { display: flex; justify-content: space-between; margin-bottom: 8px; }';
-    printHTML += '.info-row:last-child { margin-bottom: 0; }';
-    printHTML += '.highlight-red { color: #d9534f; font-weight: bold; }';
-    printHTML += '.highlight-blue { color: #0275d8; font-weight: bold; }';
-    printHTML += '.table-title { font-size: 14px; font-weight: bold; margin-bottom: 8px; }';
-    printHTML += 'table { width: 100%; border-collapse: collapse; margin-bottom: 15px; font-size: 14px; }';
-    printHTML += 'table, th, td { border: 1px solid #000; }';
-    printHTML += 'th, td { padding: 10px; text-align: center; }';
-    printHTML += 'th { background-color: #f2f2f2; font-weight: bold; }';
-    printHTML += 'td.text-left { text-align: left; }';
-    printHTML += 'td.text-right { text-align: right; }';
-    printHTML += '.total-row td { font-weight: bold; }';
-    printHTML += '.signature-section { display: flex; justify-content: space-between; margin-top: 50px; text-align: center; font-size: 14px; }';
-    printHTML += '.signature-line { width: 280px; border-top: 1px solid #000; margin: auto; margin-bottom: 5px; }';
+    printHTML += '@import url("https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&display=swap");';
+    printHTML += '@page { size: A4 portrait; margin: 0; }';
+    printHTML += '* { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }';
+    printHTML += 'html, body { margin: 0; padding: 0; background-color: #fff; }';
+    printHTML += 'body { font-family: "Sarabun", "Tahoma", sans-serif; color: #000; line-height: 1.45; font-size: 13px; }';
+    printHTML += '.doc-container { width: 100%; max-width: 100%; margin: 0 auto; padding: 12mm 15mm 12mm 15mm; background: #fff; }';
+    
+    // Header Bar
+    printHTML += '.brand-bar { height: 5px; background: linear-gradient(90deg, #dc2626 0%, #ef4444 38%, #1e3a8a 38%, #2563eb 100%); border-radius: 2px; margin-bottom: 12px; }';
+    printHTML += '.header-table { width: 100%; border-collapse: collapse; border-bottom: 2.5px solid #1e3a8a; padding-bottom: 10px; margin-bottom: 16px; }';
+    printHTML += '.brand-title { font-size: 21px; font-weight: 800; color: #dc2626; letter-spacing: 0.8px; margin: 0 0 2px 0; }';
+    printHTML += '.header-title { font-size: 24px; font-weight: bold; color: #1e3a8a; margin: 0; }';
+    printHTML += '.header-sub { font-size: 14px; font-weight: bold; color: #334155; margin-top: 4px; }';
+    printHTML += '.header-meta { text-align: right; font-size: 12.5px; color: #000; vertical-align: bottom; white-space: nowrap; }';
+    
+    // Customer Info Card
+    printHTML += '.info-card { border: 1.5px solid #000; border-radius: 8px; background: #fff; padding: 12px 18px; margin-bottom: 16px; }';
+    printHTML += '.info-grid { width: 100%; border-collapse: collapse; }';
+    printHTML += '.info-grid td { padding: 6px 8px; vertical-align: middle; font-size: 13.5px; color: #000; }';
+    printHTML += '.info-label { font-weight: bold; color: #000; white-space: nowrap; width: 1%; padding-right: 10px; }';
+    printHTML += '.info-val { font-weight: bold; color: #000; white-space: nowrap; }';
+    printHTML += '.plate-badge { display: inline-block; background: #fff; color: #000; font-weight: bold; padding: 3px 12px; border-radius: 6px; border: 1.5px solid #000; font-size: 13px; letter-spacing: 0.5px; }';
+    
+    // Items Table (Rounded container & Full Grid Dividers)
+    printHTML += '.table-container { border: 1.5px solid #000; border-radius: 8px; overflow: hidden; margin-bottom: 16px; background: #fff; }';
+    printHTML += '.items-table { width: 100%; border-collapse: collapse; margin: 0; }';
+    printHTML += '.items-table th, .items-table td { border: 1px solid #000; }';
+    printHTML += '.items-table th { background: #e2e8f0; color: #000000 !important; font-weight: 800 !important; font-size: 14px; padding: 10px 10px; text-align: center; border-bottom: 2px solid #000; }';
+    printHTML += '.items-table td { padding: 9px 10px; font-size: 13px; color: #000; }';
+    
+    // Summary & Financial Section (Rounded container & Clean Grid)
+    printHTML += '.calc-container { border: 1.5px solid #000; border-radius: 8px; overflow: hidden; background: #fff; margin-left: auto; }';
+    printHTML += '.calc-box { width: 100%; border-collapse: collapse; margin: 0; }';
+    printHTML += '.calc-box td { padding: 9px 16px; font-size: 13.5px; border-bottom: 1px solid #000; color: #000; }';
+    printHTML += '.calc-box tr:last-child td { border-bottom: none; }';
+    printHTML += '.calc-label { text-align: right; color: #000; font-weight: bold; border-right: 1px solid #000; }';
+    printHTML += '.calc-val { text-align: right; font-weight: bold; color: #000; width: 150px; }';
+    printHTML += '.row-subtotal { background: #f8fafc; }';
+    printHTML += '.row-net { background: #eff6ff; }';
+    printHTML += '.row-net td { color: #1e40af !important; font-weight: bold !important; font-size: 14px !important; }';
+    printHTML += '.row-deposit { background: #fef2f2; }';
+    printHTML += '.row-deposit td { color: #dc2626 !important; font-weight: bold !important; font-size: 14px !important; border-top: 1px solid #000; border-bottom: 1px solid #000; }';
+    printHTML += '.row-balance { background: #ecfdf5; }';
+    printHTML += '.row-balance td { color: #047857 !important; font-weight: 800 !important; font-size: 16px !important; border-top: 1.5px solid #000; border-bottom: none; }';
+    
+    // Signatures Section
+    printHTML += '.signatures-table { width: 100%; border-collapse: collapse; margin-top: 36px; margin-bottom: 16px; }';
+    printHTML += '.sig-box { width: 42%; text-align: center; padding: 10px; }';
+    printHTML += '.sig-line { width: 220px; border-top: 1.5px solid #000; margin: 40px auto 6px auto; }';
+    printHTML += '.sig-role { font-weight: bold; font-size: 13px; color: #1e3a8a; }';
+    printHTML += '.sig-date { font-size: 12px; color: #000; margin-top: 4px; }';
     printHTML += '</style>';
     printHTML += '</head><body>';
 
-    printHTML += '<div class="invoice-box">';
+    printHTML += '<div class="doc-container">';
+    
+    // Brand Stripe
+    printHTML += '<div class="brand-bar"></div>';
 
-    // Header
-    printHTML += '<div class="header">';
-    printHTML += '<h2>ใบรับมัดจำอะไหล่</h2>';
-    printHTML += '<p>ศูนย์บริการอีซูซุฮั่วเชียงจั่น โทร.081-6395800</p>';
-    printHTML += '</div>';
+    // Header Table
+    printHTML += '<table class="header-table">';
+    printHTML += '<tr>';
+    printHTML += '<td style="vertical-align: bottom;">';
+    printHTML += '<div class="brand-title">ISUZU HUA CHIANG CHAN</div>';
+    printHTML += '<div class="header-title">ใบรับมัดจำอะไหล่</div>';
+    printHTML += '<div class="header-sub">ศูนย์บริการอีซูซุฮั่วเชียงจั่น โทร. 081-6395800</div>';
+    printHTML += '</td>';
+    printHTML += '<td class="header-meta">';
+    printHTML += 'วันที่พิมพ์เอกสาร: <strong style="color: #000;">' + printDateTh + ' ' + printTime + '</strong>';
+    printHTML += '</td>';
+    printHTML += '</tr>';
+    printHTML += '</table>';
 
-    // Info Box
-    printHTML += '<div class="info-box">';
-    printHTML += '<div class="info-row">';
-    printHTML += '<div><strong>ชื่อลูกค้า:</strong> ' + escapeHtml(customer) + '</div>';
-    printHTML += '<div><strong>เบอร์โทรติดต่อ:</strong> ' + escapeHtml(phone) + '</div>';
-    printHTML += '</div>';
-    printHTML += '<div class="info-row">';
-    printHTML += '<div><strong>วันที่สั่งอะไหล่:</strong> ' + orderDateTh + '</div>';
-    printHTML += '<div><strong>วันที่กำหนดรับของ:</strong> <span class="highlight-red">' + expectedDateTh + '</span></div>';
-    printHTML += '</div>';
-    printHTML += '<hr style="border: 0; border-top: 1px dashed #ccc; margin: 10px 0;">';
-    if (itemsTotal > 0) {
-        printHTML += '<div class="info-row">';
-        printHTML += '<div><strong>ยอดรวมราคารวม:</strong> <span class="highlight-blue">' + itemsTotal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' บาท</span> | <strong>ราคาสุทธิ:</strong> <span class="highlight-blue">' + itemsGrandTotal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' บาท</span></div>';
-        printHTML += '<div><strong>ยอดมัดจำที่ชำระไว้:</strong> <span class="highlight-red">' + amount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' บาท</span></div>';
-        printHTML += '</div>';
-    } else {
-        printHTML += '<div class="info-row">';
-        printHTML += '<div><strong>ยอดมัดจำที่ชำระไว้:</strong> <span class="highlight-red">' + amount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' บาท</span></div>';
-        printHTML += '</div>';
+    // Customer & Order Info Card
+    printHTML += '<div class="info-card">';
+    printHTML += '<table class="info-grid">';
+    printHTML += '<tr>';
+    printHTML += '<td class="info-label">ชื่อลูกค้า:</td>';
+    printHTML += '<td class="info-val" style="font-size: 14px; color: #000;">' + escapeHtml(customer) + '</td>';
+    printHTML += '<td class="info-label" style="padding-left: 20px;">วันที่สั่งอะไหล่:</td>';
+    printHTML += '<td class="info-val">' + orderDateTh + '</td>';
+    printHTML += '</tr>';
+    printHTML += '<tr>';
+    printHTML += '<td class="info-label">เบอร์โทรติดต่อ:</td>';
+    printHTML += '<td class="info-val">' + escapeHtml(phone) + '</td>';
+    printHTML += '<td class="info-label" style="padding-left: 20px;">กำหนดรับสินค้า:</td>';
+    printHTML += '<td class="info-val">' + expectedDateTh + '</td>';
+    printHTML += '</tr>';
+    if (licensePlate) {
+        printHTML += '<tr>';
+        printHTML += '<td class="info-label">ทะเบียนรถ:</td>';
+        printHTML += '<td class="info-val" colspan="3"><span class="plate-badge">' + escapeHtml(licensePlate) + '</span></td>';
+        printHTML += '</tr>';
     }
+    printHTML += '</table>';
     printHTML += '</div>';
 
-    // Items Table
+    // Items Table (if any)
     if (itemsHtml) {
-        printHTML += '<div class="table-title">รายการอะไหล่ที่สั่ง (' + items.length + ' รายการ):</div>';
+        printHTML += '<div style="font-weight: bold; margin-bottom: 6px; font-size: 13px; color: #000;">';
+        printHTML += 'รายการอะไหล่ที่สั่งซื้อ (' + items.length + ' รายการ):';
+        printHTML += '</div>';
         printHTML += itemsHtml;
-
-        // Summary rows
-        printHTML += '<table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 14px;">';
-        printHTML += '<tbody>';
-        printHTML += '<tr class="total-row">';
-        printHTML += '<td colspan="6" style="border: 1px solid #ddd; padding: 10px; text-align: right;">ผลรวมราคาสุทธิทั้งสิ้น</td>';
-        printHTML += '<td style="border: 1px solid #ddd; padding: 10px; text-align: right; color: #0275d8;">' + itemsGrandTotal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + '</td>';
-        printHTML += '</tr>';
-        printHTML += '<tr class="total-row">';
-        printHTML += '<td colspan="6" style="border: 1px solid #ddd; padding: 10px; text-align: right; color: #d9534f;">หักยอดมัดจำรวม</td>';
-        printHTML += '<td style="border: 1px solid #ddd; padding: 10px; text-align: right; color: #d9534f;">' + amount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + '</td>';
-        printHTML += '</tr>';
-        printHTML += '<tr class="total-row">';
-        printHTML += '<td colspan="6" style="border: 1px solid #ddd; padding: 10px; text-align: right; color: #006400;">ยอดคงเหลือที่ต้องชำระ</td>';
-        printHTML += '<td style="border: 1px solid #ddd; padding: 10px; text-align: right; color: #006400; font-size: 16px;">' + remainingAmount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + '</td>';
-        printHTML += '</tr>';
-        printHTML += '</tbody></table>';
     }
 
-    // Signature Section
-    printHTML += '<div class="signature-section">';
-    printHTML += '<div>';
-    printHTML += '<div class="signature-line"></div>';
-    printHTML += '<div>ผู้รับเงิน / พนักงานออกใบมัดจำ</div>';
-    printHTML += '</div>';
-    printHTML += '<div>';
-    printHTML += '<div class="signature-line"></div>';
-    printHTML += '<div>ผู้สั่งซื้อ / ลูกค้า</div>';
-    printHTML += '</div>';
-    printHTML += '</div>';
+    // Financial Calculation (Spacious Layout)
+    printHTML += '<table style="width: 100%; border-collapse: collapse; margin-top: 6px; margin-bottom: 20px;">';
+    printHTML += '<tr>';
+    printHTML += '<td style="vertical-align: top; width: 40%; padding-right: 20px;">';
+    if (note) {
+        printHTML += '<div style="border: 1.5px solid #000; border-left: 5px solid #2563eb; background: #f8fafc; border-radius: 8px; padding: 12px 14px; font-size: 13.5px; color: #000; line-height: 1.5;">';
+        printHTML += '<div style="font-weight: bold; color: #1e40af; margin-bottom: 4px;">หมายเหตุ:</div>';
+        printHTML += escapeHtml(note);
+        printHTML += '</div>';
+    }
+    printHTML += '</td>';
+    printHTML += '<td style="vertical-align: top; width: 60%;">';
+    printHTML += '<div class="calc-container"><table class="calc-box">';
+    if (itemsTotal > 0) {
+        printHTML += '<tr class="row-subtotal">';
+        printHTML += '<td class="calc-label" style="color: #475569;">รวมมูลค่าสินค้า (ก่อน VAT):</td>';
+        printHTML += '<td class="calc-val">' + itemsTotal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' บาท</td>';
+        printHTML += '</tr>';
+        printHTML += '<tr class="row-subtotal">';
+        printHTML += '<td class="calc-label" style="color: #475569;">ภาษีมูลค่าเพิ่ม VAT 7%:</td>';
+        printHTML += '<td class="calc-val">' + vatAmount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' บาท</td>';
+        printHTML += '</tr>';
+        printHTML += '<tr class="row-net">';
+        printHTML += '<td class="calc-label">ราคาสุทธิทั้งสิ้น:</td>';
+        printHTML += '<td class="calc-val">' + itemsGrandTotal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' บาท</td>';
+        printHTML += '</tr>';
+    }
+    printHTML += '<tr class="row-deposit">';
+    printHTML += '<td class="calc-label">หักยอดเงินมัดจำ:</td>';
+    printHTML += '<td class="calc-val">- ' + amount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' บาท</td>';
+    printHTML += '</tr>';
+    if (itemsTotal > 0) {
+        printHTML += '<tr class="row-balance">';
+        printHTML += '<td class="calc-label">ยอดคงเหลือที่ต้องชำระ:</td>';
+        printHTML += '<td class="calc-val">' + remainingAmount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' บาท</td>';
+        printHTML += '</tr>';
+    }
+    printHTML += '</table></div>';
+    printHTML += '</td>';
+    printHTML += '</tr>';
+    printHTML += '</table>';
 
-    printHTML += '</div>';
+    // Signatures Section
+    printHTML += '<table class="signatures-table">';
+    printHTML += '<tr>';
+    printHTML += '<td class="sig-box">';
+    printHTML += '<div class="sig-line"></div>';
+    printHTML += '<div class="sig-role">ผู้สั่งซื้อ / ลูกค้า</div>';
+    printHTML += '<div class="sig-date">วันที่ ........ / ........ / ........</div>';
+    printHTML += '</td>';
+    printHTML += '<td style="width: 16%;"></td>';
+    printHTML += '<td class="sig-box">';
+    printHTML += '<div class="sig-line"></div>';
+    printHTML += '<div class="sig-role">ผู้รับเงิน / พนักงานออกใบมัดจำ</div>';
+    printHTML += '<div class="sig-date">วันที่ ........ / ........ / ........</div>';
+    printHTML += '</td>';
+    printHTML += '</tr>';
+    printHTML += '</table>';
 
+    printHTML += '</div>'; // doc-container
     printHTML += '</body></html>';
 
     // Create iframe for printing
@@ -2111,6 +2599,7 @@ function editDeposit(depositId) {
 function saveDepositEdit(depositId) {
     const customer = document.getElementById('edit-customer').value.trim();
     const phone = document.getElementById('edit-phone').value.trim();
+    const licensePlate = document.getElementById('edit-license-plate') ? document.getElementById('edit-license-plate').value.trim() : '';
     const orderDate = document.getElementById('edit-order-date').value;
     const expectedDate = document.getElementById('edit-expected-date').value;
     const amount = Number(document.getElementById('edit-amount').value);
@@ -2144,6 +2633,7 @@ function saveDepositEdit(depositId) {
     database.ref('deposits/' + depositId).update({
         customer: customer,
         phone: phone,
+        licensePlate: licensePlate,
         orderDate: orderDate,
         expectedDate: expectedDate,
         amount: amount,
@@ -2183,9 +2673,13 @@ function renderDepositEditForm(deposit) {
         '<label class="form-label small fw-bold mb-1">ชื่อลูกค้า</label>' +
         '<input type="text" class="form-control form-control-sm" id="edit-customer" value="' + escapeHtml(deposit.customer) + '">' +
         '</div>' +
-        '<div class="col-md-3">' +
+        '<div class="col-md-2">' +
         '<label class="form-label small fw-bold mb-1">เบอร์ติดต่อ</label>' +
         '<input type="text" class="form-control form-control-sm" id="edit-phone" value="' + escapeHtml(deposit.phone) + '">' +
+        '</div>' +
+        '<div class="col-md-2">' +
+        '<label class="form-label small fw-bold mb-1">ทะเบียนรถ</label>' +
+        '<input type="text" class="form-control form-control-sm" id="edit-license-plate" value="' + escapeHtml(deposit.licensePlate || '') + '" placeholder="เช่น 1กข-1234">' +
         '</div>' +
         '<div class="col-md-2">' +
         '<label class="form-label small fw-bold mb-1">วันที่สั่ง</label>' +
@@ -2195,7 +2689,7 @@ function renderDepositEditForm(deposit) {
         '<label class="form-label small fw-bold mb-1">กำหนดรับของ</label>' +
         '<input type="date" class="form-control form-control-sm" id="edit-expected-date" value="' + deposit.expectedDate + '">' +
         '</div>' +
-        '<div class="col-md-2">' +
+        '<div class="col-md-1">' +
         '<label class="form-label small fw-bold mb-1">ยอดมัดจำ</label>' +
         '<input type="number" class="form-control form-control-sm" id="edit-amount" value="' + deposit.amount + '" step="0.01">' +
         '</div>' +
@@ -2407,46 +2901,71 @@ document.querySelectorAll('[data-open-menu]').forEach(function (card) {
 });
 
 document.getElementById('btn-save').addEventListener('click', function () {
-    if (tempItems.length === 0) {
-        alert('กรุณาเพิ่มรายการอะไหล่อย่างน้อย 1 รายการ');
-        return;
-    }
-    
     const btn = this;
-    btn.classList.add('loading');
-    
+    const editId = document.getElementById('edit-id').value;
+
     try {
-        const list = getOrders();
-        const editId = document.getElementById('edit-id').value;
+        btn.classList.add('loading');
+
+        if (tempItems.length === 0) {
+            alert('กรุณาเพิ่มรายการอะไหล่อย่างน้อย 1 รายการ');
+            btn.classList.remove('loading');
+            return;
+        }
+
         const orderType = document.getElementById('order-type').value;
         const licensePlate = document.getElementById('license-plate').value.trim();
         const note = document.getElementById('note').value.trim();
 
-        let batchId, date, time;
+        let batchId;
+        let date;
+        let time;
 
-        // Check if adding to existing batch
-        if (editId && editId.startsWith('add-to-batch:')) {
-            // Add to existing batch
-            batchId = editId.replace('add-to-batch:', '');
-            const existingBatch = list.find(function (x) { return x.batchId === batchId; });
-            if (existingBatch) {
-                date = existingBatch.date;
-                time = existingBatch.time;
-                licensePlate = existingBatch.licensePlate || licensePlate;
+        if (editId) {
+            if (editId.startsWith('edit-batch:')) {
+                // Edit batch mode - remove all items from the batch
+                const oldBatchId = editId.replace('edit-batch:', '');
+                let list = getOrders();
+                const existingBatch = list.find(function (x) { return x.batchId === oldBatchId; });
+                if (existingBatch) {
+                    batchId = oldBatchId;
+                    date = existingBatch.date;
+                    time = existingBatch.time;
+                    // Remove all items from this batch
+                    setOrders(list.filter(function (x) { return x.batchId !== oldBatchId; }));
+                } else {
+                    batchId = String(Date.now()) + Math.random().toString(36).substr(2, 9);
+                    date = todayTh();
+                    time = getCurrentTime();
+                }
+            } else if (editId.startsWith('add-to-batch:')) {
+                // Add to existing batch
+                const targetBatchId = editId.replace('add-to-batch:', '');
+                let list = getOrders();
+                const existingBatch = list.find(function (x) { return x.batchId === targetBatchId; });
+                if (existingBatch) {
+                    batchId = targetBatchId;
+                    date = existingBatch.date;
+                    time = existingBatch.time;
+                    licensePlate = existingBatch.licensePlate || licensePlate;
+                } else {
+                    batchId = String(Date.now()) + Math.random().toString(36).substr(2, 9);
+                    date = todayTh();
+                    time = getCurrentTime();
+                }
             } else {
+                // Edit single item mode - remove old item
+                let list = getOrders();
+                const idx = list.findIndex(function (x) { return x.id === editId; });
+                if (idx !== -1) {
+                    list.splice(idx, 1);
+                    setOrders(list);
+                }
+                // Create new batch for edited item
+                batchId = String(Date.now()) + Math.random().toString(36).substr(2, 9);
                 date = todayTh();
                 time = getCurrentTime();
             }
-        } else if (editId) {
-            // Edit mode - remove old item
-            const idx = list.findIndex(function (x) { return x.id === editId; });
-            if (idx !== -1) {
-                list.splice(idx, 1);
-            }
-            // Create new batch for edited item
-            batchId = String(Date.now()) + Math.random().toString(36).substr(2, 9);
-            date = todayTh();
-            time = getCurrentTime();
         } else {
             // Normal save - create new batch
             batchId = String(Date.now()) + Math.random().toString(36).substr(2, 9);
@@ -2455,6 +2974,7 @@ document.getElementById('btn-save').addEventListener('click', function () {
         }
 
         // Add all temp items
+        let list = getOrders();
         tempItems.forEach(function (item) {
             list.unshift({
                 id: String(Date.now()) + Math.random().toString(36).substr(2, 9),
@@ -2471,8 +2991,9 @@ document.getElementById('btn-save').addEventListener('click', function () {
                 received: false
             });
         });
-        
+
         setOrders(list);
+
         // Reset form fields manually since it's a div, not a form
         document.getElementById('edit-id').value = '';
         document.getElementById('temp-part-no').value = '';
@@ -2484,7 +3005,7 @@ document.getElementById('btn-save').addEventListener('click', function () {
         document.getElementById('license-plate').value = '';
         document.getElementById('note').value = '';
         tempItems = [];
-        
+
         // Reset PIN boxes
         const boxes = document.querySelectorAll('.pin-box-small');
         if (boxes.length > 0) {
@@ -2494,9 +3015,12 @@ document.getElementById('btn-save').addEventListener('click', function () {
             });
             boxes[0].classList.add('active');
         }
-        
+
+        // Hide cancel button
+        document.getElementById('btn-cancel-edit-batch').classList.add('hidden');
+
         renderTempItems();
-        
+
         setTimeout(function() {
             btn.classList.remove('loading');
             showMenu('list');
@@ -2508,6 +3032,81 @@ document.getElementById('btn-save').addEventListener('click', function () {
     }
 });
 
+document.getElementById('btn-cancel-edit-batch').addEventListener('click', function () {
+    // Reset form
+    document.getElementById('edit-id').value = '';
+    document.getElementById('temp-part-no').value = '';
+    document.getElementById('temp-part-no-hidden').value = '';
+    document.getElementById('temp-part-name').value = '';
+    document.getElementById('temp-qty').value = 1;
+    document.getElementById('temp-item-note').value = '';
+    document.getElementById('order-type').value = 'normal';
+    document.getElementById('license-plate').value = '';
+    document.getElementById('note').value = '';
+    tempItems = [];
+
+    // Reset PIN boxes
+    const boxes = document.querySelectorAll('.pin-box-small');
+    if (boxes.length > 0) {
+        boxes.forEach(function (box) {
+            box.textContent = '';
+            box.classList.remove('filled', 'active');
+        });
+        boxes[0].classList.add('active');
+    }
+
+    // Hide cancel button
+    document.getElementById('btn-cancel-edit-batch').classList.add('hidden');
+
+    renderTempItems();
+    showMenu('list');
+});
+
+function saveInlineItem(itemId) {
+    const list = getOrders();
+    const item = list.find(function (x) { return x.id === itemId; });
+    if (!item) return;
+
+    const partNoInput = document.querySelector('.inline-edit-part-no[data-id="' + itemId + '"]');
+    const partNameInput = document.querySelector('.inline-edit-part-name[data-id="' + itemId + '"]');
+    const qtyInput = document.querySelector('.inline-edit-qty[data-id="' + itemId + '"]');
+    const noteInput = document.querySelector('.inline-edit-note[data-id="' + itemId + '"]');
+
+    if (!partNoInput) return;
+
+    const newPartNo = partNoInput.value.trim().toUpperCase();
+    const newPartName = partNameInput ? partNameInput.value.trim() : '';
+    const newQty = qtyInput ? parseInt(qtyInput.value, 10) : 1;
+    const newNote = noteInput ? noteInput.value.trim() : '';
+
+    if (!newPartNo) {
+        alert('กรุณากรอกเลขอะไหล่');
+        partNoInput.focus();
+        return;
+    }
+
+    if (newPartNo.length !== 10) {
+        alert('เลขอะไหล่ต้องมี 10 หลัก');
+        partNoInput.focus();
+        return;
+    }
+
+    if (isNaN(newQty) || newQty < 1) {
+        alert('จำนวนต้องมากกว่า 0');
+        if (qtyInput) qtyInput.focus();
+        return;
+    }
+
+    item.partNo = newPartNo;
+    item.partName = newPartName;
+    item.qty = newQty;
+    item.itemNote = newNote;
+
+    editingItemId = null;
+    setOrders(list);
+    renderTable();
+}
+
 document.getElementById('order-list-container').addEventListener('click', function (e) {
     const editBtn = e.target.closest('[data-edit]');
     const delBtn = e.target.closest('[data-del]');
@@ -2517,6 +3116,19 @@ document.getElementById('order-list-container').addEventListener('click', functi
     const addToBatchBtn = e.target.closest('[data-add-to-batch]');
     const printBatchBtn = e.target.closest('[data-print-batch]');
     const editItemNoteBtn = e.target.closest('[data-edit-item-note]');
+    const saveInlineBtn = e.target.closest('[data-save-inline]');
+    const cancelInlineBtn = e.target.closest('[data-cancel-inline]');
+
+    if (saveInlineBtn) {
+        saveInlineItem(saveInlineBtn.dataset.saveInline);
+        return;
+    }
+
+    if (cancelInlineBtn) {
+        editingItemId = null;
+        renderTable();
+        return;
+    }
 
     if (deleteBatchBtn) {
         if (!confirm('ลบทั้งกลุ่มนี้หรือไม่?')) return;
@@ -2532,20 +3144,25 @@ document.getElementById('order-list-container').addEventListener('click', functi
         const batchItems = list.filter(function (x) { return x.batchId === batchId; });
         if (batchItems.length === 0) return;
 
-        const currentNote = batchItems[0].note;
-        const currentLicensePlate = batchItems[0].licensePlate || '';
-        const newNote = prompt('แก้ไขหมายเหตุ:', currentNote);
-        if (newNote === null) return; // User cancelled
-
-        const newLicensePlate = prompt('แก้ไขทะเบียนรถ:', currentLicensePlate);
-        if (newLicensePlate === null) return; // User cancelled
-
-        batchItems.forEach(function (item) {
-            item.note = newNote;
-            item.licensePlate = newLicensePlate.trim();
+        // Load batch items to temp items for editing
+        tempItems = batchItems.map(function (item) {
+            return {
+                id: item.id,
+                partNo: item.partNo,
+                partName: item.partName,
+                qty: item.qty,
+                itemNote: item.itemNote
+            };
         });
-        setOrders(list);
-        renderTable();
+
+        // Set edit-id to indicate we're editing a batch
+        document.getElementById('edit-id').value = 'edit-batch:' + batchId;
+        document.getElementById('order-type').value = batchItems[0].type;
+        document.getElementById('license-plate').value = batchItems[0].licensePlate || '';
+        document.getElementById('note').value = batchItems[0].note;
+
+        renderTempItems();
+        showMenu('add');
         return;
     }
 
@@ -2555,26 +3172,14 @@ document.getElementById('order-list-container').addEventListener('click', functi
         const batchItems = list.filter(function (x) { return x.batchId === batchId; });
         if (batchItems.length === 0) return;
 
-        // Set edit-batch to indicate we're adding to existing batch
-        document.getElementById('edit-id').value = 'add-to-batch:' + batchId;
-        document.getElementById('order-type').value = batchItems[0].type;
-        document.getElementById('license-plate').value = batchItems[0].licensePlate || '';
-        document.getElementById('note').value = batchItems[0].note;
-        document.getElementById('temp-item-note').value = '';
-        tempItems = [];
-
-        // Reset PIN boxes
-        const boxes = document.querySelectorAll('.pin-box-small');
-        if (boxes.length > 0) {
-            boxes.forEach(function (box) {
-                box.textContent = '';
-                box.classList.remove('filled', 'active');
-            });
-            boxes[0].classList.add('active');
-        }
-
-        renderTempItems();
-        showMenu('add');
+        // Open quick add modal
+        quickAddBatchId = batchId;
+        document.getElementById('quick-part-no').value = '';
+        document.getElementById('quick-part-name').value = '';
+        document.getElementById('quick-qty').value = 1;
+        document.getElementById('quick-item-note').value = '';
+        document.getElementById('quick-add-modal').classList.remove('hidden');
+        document.getElementById('quick-part-no').focus();
         return;
     }
 
@@ -2611,51 +3216,34 @@ document.getElementById('order-list-container').addEventListener('click', functi
     }
 
     if (editBtn) {
-        const item = getOrders().find(function (x) { return x.id === editBtn.dataset.edit; });
-        if (!item) return;
-        document.getElementById('edit-id').value = item.id;
-        document.getElementById('order-type').value = item.type;
-        document.getElementById('license-plate').value = item.licensePlate || '';
-        document.getElementById('note').value = item.note;
-
-        // Add item to temp items
-        tempItems = [{
-            partNo: item.partNo,
-            partName: item.partName,
-            qty: item.qty,
-            itemNote: item.itemNote || ''
-        }];
-
-        document.getElementById('temp-part-no-hidden').value = item.partNo;
-        document.getElementById('temp-part-no').value = item.partNo;
-        document.getElementById('temp-item-note').value = item.itemNote || '';
-
-        // Update PIN boxes
-        const boxes = document.querySelectorAll('.pin-box-small');
-        if (boxes.length > 0) {
-            boxes.forEach(function (box, index) {
-                box.classList.remove('active');
-                if (index < item.partNo.length) {
-                    box.textContent = item.partNo[index];
-                    box.classList.add('filled');
-                } else {
-                    box.textContent = '';
-                    box.classList.remove('filled');
-                }
-            });
-            if (item.partNo.length < 10) {
-                boxes[item.partNo.length].classList.add('active');
-            }
-        }
-
-        renderTempItems();
-
-        showMenu('add');
+        editingItemId = editBtn.dataset.edit;
+        renderTable();
+        return;
     }
     if (delBtn) {
         if (!confirm('ลบรายการนี้หรือไม่?')) return;
         setOrders(getOrders().filter(function (x) { return x.id !== delBtn.dataset.del; }));
         renderTable();
+    }
+});
+
+document.getElementById('order-list-container').addEventListener('input', function (e) {
+    if (e.target.matches('.inline-edit-part-no')) {
+        e.target.value = e.target.value.toUpperCase();
+    }
+});
+
+document.getElementById('order-list-container').addEventListener('keydown', function (e) {
+    if (e.target.matches('.inline-edit-part-no, .inline-edit-part-name, .inline-edit-qty, .inline-edit-note')) {
+        const itemId = e.target.dataset.id;
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            saveInlineItem(itemId);
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            editingItemId = null;
+            renderTable();
+        }
     }
 });
 
@@ -2742,6 +3330,83 @@ function renderSearchAll() {
 
 document.getElementById('search-all-box').addEventListener('input', renderSearchAll);
 
+// Quick Add Modal Functions
+document.getElementById('btn-close-quick-add').addEventListener('click', function () {
+    document.getElementById('quick-add-modal').classList.add('hidden');
+    quickAddBatchId = null;
+});
+
+document.getElementById('btn-cancel-quick-add').addEventListener('click', function () {
+    document.getElementById('quick-add-modal').classList.add('hidden');
+    quickAddBatchId = null;
+});
+
+document.getElementById('btn-save-quick-add').addEventListener('click', function () {
+    const partNo = document.getElementById('quick-part-no').value.trim().toUpperCase();
+    const partName = document.getElementById('quick-part-name').value.trim();
+    const qty = Number(document.getElementById('quick-qty').value);
+    const itemNote = document.getElementById('quick-item-note').value.trim();
+
+    if (!partNo) {
+        alert('กรุณากรอกเลขอะไหล่');
+        return;
+    }
+
+    if (partNo.length !== 10) {
+        alert('เลขอะไหล่ต้องมี 10 หลัก');
+        return;
+    }
+
+    if (qty < 1) {
+        alert('จำนวนต้องมากกว่า 0');
+        return;
+    }
+
+    if (!quickAddBatchId) {
+        alert('ไม่พบข้อมูล batch');
+        return;
+    }
+
+    // Get the batch info
+    const list = getOrders();
+    const existingBatch = list.find(function (x) { return x.batchId === quickAddBatchId });
+
+    if (!existingBatch) {
+        alert('ไม่พบข้อมูล batch');
+        return;
+    }
+
+    // Add new item to the batch
+    const newItem = {
+        id: String(Date.now()) + Math.random().toString(36).substr(2, 9),
+        batchId: quickAddBatchId,
+        date: existingBatch.date,
+        time: existingBatch.time,
+        partNo: partNo,
+        partName: partName,
+        qty: qty,
+        itemNote: itemNote || '',
+        type: existingBatch.type,
+        licensePlate: existingBatch.licensePlate,
+        note: existingBatch.note,
+        received: false
+    };
+
+    list.unshift(newItem);
+    setOrders(list);
+
+    // Close modal and reset
+    document.getElementById('quick-add-modal').classList.add('hidden');
+    document.getElementById('quick-part-no').value = '';
+    document.getElementById('quick-part-name').value = '';
+    document.getElementById('quick-qty').value = 1;
+    document.getElementById('quick-item-note').value = '';
+    quickAddBatchId = null;
+
+    // Refresh table
+    renderTable();
+});
+
 // Check for items that should have been delivered
 function checkDeliveries() {
     const all = loadAll();
@@ -2780,3 +3445,1759 @@ function checkDeliveries() {
         alert(message);
     }
 }
+
+// ===================================================
+// Due Parts Alerts Logic
+// ===================================================
+let dueAlertsFilterPerson = 'all';
+let dueAlertsSearchQuery = '';
+
+function updateDueBadge(count) {
+    const badge = document.getElementById('badge-due-count');
+    if (!badge) return;
+
+    let dueCount = 0;
+    if (typeof count === 'number') {
+        dueCount = count;
+    } else {
+        const all = loadAll();
+        const today = todayTh();
+        const current = parseDateTh(today);
+        Object.keys(all).forEach(function (pid) {
+            if (!all[pid] || !Array.isArray(all[pid])) return;
+            all[pid].forEach(function (item) {
+                if (!item.received) {
+                    const expectedDate = getExpectedDeliveryDate(item.date, item.type);
+                    const expected = parseDateTh(expectedDate);
+                    if (current >= expected) {
+                        dueCount++;
+                    }
+                }
+            });
+        });
+    }
+
+    if (dueCount > 0) {
+        badge.textContent = dueCount;
+        badge.classList.remove('hidden');
+    } else {
+        badge.classList.add('hidden');
+    }
+}
+
+function loadDueAlerts() {
+    const all = loadAll();
+    const today = todayTh();
+    const current = parseDateTh(today);
+    const container = document.getElementById('due-alerts-container');
+    const empty = document.getElementById('due-alerts-empty');
+
+    if (!container) return;
+
+    const dueItems = [];
+
+    Object.keys(all).forEach(function (personId) {
+        if (!all[personId] || !Array.isArray(all[personId])) return;
+
+        all[personId].forEach(function (item) {
+            if (!item.received) {
+                const expectedDate = getExpectedDeliveryDate(item.date, item.type);
+                const expected = parseDateTh(expectedDate);
+
+                if (current >= expected) {
+                    const diffTime = current.getTime() - expected.getTime();
+                    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+                    dueItems.push({
+                        ...item,
+                        personId: personId,
+                        personName: PEOPLE[personId] ? PEOPLE[personId].name : personId,
+                        expectedDate: expectedDate,
+                        diffDays: diffDays,
+                        isOverdue: diffDays > 0,
+                        isToday: diffDays === 0
+                    });
+                }
+            }
+        });
+    });
+
+    // Update Stats
+    const totalCount = dueItems.length;
+    const overdueCount = dueItems.filter(function (x) { return x.isOverdue; }).length;
+    const todayCount = dueItems.filter(function (x) { return x.isToday; }).length;
+
+    const elTotal = document.getElementById('due-stat-total');
+    const elOverdue = document.getElementById('due-stat-overdue');
+    const elToday = document.getElementById('due-stat-today');
+    if (elTotal) elTotal.textContent = totalCount + ' รายการ';
+    if (elOverdue) elOverdue.textContent = overdueCount + ' รายการ';
+    if (elToday) elToday.textContent = todayCount + ' รายการ';
+
+    updateDueBadge(totalCount);
+
+    // Populate person filter dropdown
+    const personFilterSelect = document.getElementById('due-person-filter');
+    if (personFilterSelect && personFilterSelect.options.length <= 1) {
+        Object.keys(PEOPLE).forEach(function (pid) {
+            const opt = document.createElement('option');
+            opt.value = pid;
+            opt.textContent = PEOPLE[pid].name;
+            personFilterSelect.appendChild(opt);
+        });
+    }
+
+    // Apply Filter
+    let filteredItems = dueItems;
+    if (dueAlertsFilterPerson && dueAlertsFilterPerson !== 'all') {
+        filteredItems = filteredItems.filter(function (x) { return x.personId === dueAlertsFilterPerson; });
+    }
+
+    if (dueAlertsSearchQuery && dueAlertsSearchQuery.trim() !== '') {
+        const q = dueAlertsSearchQuery.toLowerCase().trim();
+        filteredItems = filteredItems.filter(function (x) {
+            return (x.partNo && x.partNo.toLowerCase().includes(q)) ||
+                   (x.partName && x.partName.toLowerCase().includes(q)) ||
+                   (x.personName && x.personName.toLowerCase().includes(q)) ||
+                   (x.licensePlate && x.licensePlate.toLowerCase().includes(q)) ||
+                   (x.itemNote && x.itemNote.toLowerCase().includes(q)) ||
+                   (x.note && x.note.toLowerCase().includes(q));
+        });
+    }
+
+    container.innerHTML = '';
+
+    if (filteredItems.length === 0) {
+        const emptyDiv = document.createElement('div');
+        emptyDiv.className = 'card-custom p-5 text-center text-muted';
+        if (dueItems.length === 0) {
+            emptyDiv.innerHTML =
+                '<i class="fa-solid fa-circle-check fa-3x text-success mb-3"></i>' +
+                '<h6 class="fw-bold">ไม่มีรายการอะไหล่ที่ครบกำหนดวันแล้ว</h6>' +
+                '<p class="small mb-0">รายการทั้งหมดได้รับของแล้ว หรือยังไม่ถึงกำหนดส่ง</p>';
+        } else {
+            emptyDiv.innerHTML =
+                '<i class="fa-solid fa-magnifying-glass fa-3x text-muted mb-3"></i>' +
+                '<h6 class="fw-bold">ไม่พบรายการที่ตรงกับคำค้นหา</h6>' +
+                '<p class="small mb-0">ลองเปลี่ยนคำค้นหาหรือตัวกรองผู้สั่ง</p>';
+        }
+        container.appendChild(emptyDiv);
+        return;
+    }
+
+    // Group items by batch
+    const grouped = {};
+    filteredItems.forEach(function (item) {
+        const key = item.batchId || (item.personId + '_' + item.date + '_' + item.id);
+        if (!grouped[key]) {
+            grouped[key] = {
+                batchId: item.batchId,
+                personId: item.personId,
+                personName: item.personName,
+                date: item.date,
+                time: item.time,
+                type: item.type,
+                expectedDate: item.expectedDate,
+                diffDays: item.diffDays,
+                isOverdue: item.isOverdue,
+                licensePlate: item.licensePlate,
+                note: item.note,
+                items: []
+            };
+        }
+        grouped[key].items.push(item);
+    });
+
+    // Sort: highest overdue first
+    const sortedGroups = Object.values(grouped).sort(function (a, b) {
+        return b.diffDays - a.diffDays;
+    });
+
+    sortedGroups.forEach(function (group) {
+        const groupCard = document.createElement('div');
+        groupCard.className = 'due-group-card';
+
+        let badgeHtml = '';
+        if (group.isOverdue) {
+            badgeHtml = '<span class="due-badge-overdue"><i class="fa-solid fa-triangle-exclamation me-1"></i>เกินกำหนด ' + group.diffDays + ' วัน</span>';
+        } else {
+            badgeHtml = '<span class="due-badge-today"><i class="fa-solid fa-clock me-1"></i>ครบกำหนดวันนี้</span>';
+        }
+
+        const typeBadge = group.type === 'urgent'
+            ? '<span class="badge bg-danger rounded-pill px-2 py-1"><i class="fa-solid fa-bolt me-1"></i>ด่วน</span>'
+            : '<span class="badge bg-secondary rounded-pill px-2 py-1">ปกติ</span>';
+
+        const totalQty = group.items.reduce(function (sum, it) { return sum + (it.qty || 1); }, 0);
+
+        // Header
+        const header = document.createElement('div');
+        header.className = 'due-group-header';
+        header.innerHTML =
+            '<div class="d-flex flex-wrap align-items-center gap-2">' +
+                '<span class="due-person-badge"><i class="fa-solid fa-user text-primary"></i>' + escapeHtml(group.personName) + '</span>' +
+                typeBadge +
+                badgeHtml +
+                '<span class="text-muted small ms-1"><i class="fa-solid fa-calendar me-1"></i>สั่ง: ' + group.date + (group.time ? ' ' + group.time : '') + '</span>' +
+                '<span class="fw-bold small ms-1 text-primary"><i class="fa-solid fa-truck me-1"></i>กำหนดส่ง: ' + group.expectedDate + '</span>' +
+                (group.licensePlate ? '<span class="badge bg-light text-dark border ms-1"><i class="fa-solid fa-car me-1"></i>' + escapeHtml(group.licensePlate) + '</span>' : '') +
+            '</div>' +
+            '<div class="d-flex align-items-center gap-2">' +
+                '<span class="text-muted small me-2">' + group.items.length + ' รายการ (' + totalQty + ' ชิ้น)</span>' +
+                (group.batchId ? '<button type="button" class="btn btn-sm btn-success" data-receive-due-batch="' + group.batchId + '" data-person="' + group.personId + '" title="ทำเครื่องหมายว่ารับของทั้งหมดในชุดนี้แล้ว">' +
+                    '<i class="fa-solid fa-check-double me-1"></i>รับทั้งชุด' +
+                '</button>' : '') +
+                '<button type="button" class="btn btn-sm btn-outline-primary" data-goto-person="' + group.personId + '" title="ไปที่หน้ารายการของ ' + escapeHtml(group.personName) + '">' +
+                    '<i class="fa-solid fa-arrow-up-right-from-square me-1"></i>ไปที่คนนี้' +
+                '</button>' +
+            '</div>';
+
+        groupCard.appendChild(header);
+
+        if (group.note) {
+            const noteDiv = document.createElement('div');
+            noteDiv.className = 'px-3 py-2 bg-light border-bottom small text-muted';
+            noteDiv.innerHTML = '<i class="fa-solid fa-note-sticky me-1 text-warning"></i>หมายเหตุการสั่ง: ' + escapeHtml(group.note);
+            groupCard.appendChild(noteDiv);
+        }
+
+        // Table
+        const table = document.createElement('table');
+        table.className = 'table table-hover table-sm align-middle mb-0';
+        table.innerHTML =
+            '<thead>' +
+            '<tr class="custom-table-header">' +
+            '<th class="py-2 ps-3" style="width: 50px;">#</th>' +
+            '<th class="py-2">หมายเลขอะไหล่</th>' +
+            '<th class="py-2">ชื่ออะไหล่</th>' +
+            '<th class="py-2 text-center" style="width: 80px;">จำนวน</th>' +
+            '<th class="py-2">หมายเหตุอะไหล่</th>' +
+            '<th class="py-2 text-center" style="width: 140px;">จัดการ</th>' +
+            '</tr>' +
+            '</thead>' +
+            '<tbody></tbody>';
+
+        const tbody = table.querySelector('tbody');
+        group.items.forEach(function (item, idx) {
+            const tr = document.createElement('tr');
+            tr.innerHTML =
+                '<td class="ps-3 fw-medium text-muted">' + (idx + 1) + '</td>' +
+                '<td class="fw-bold text-primary">' + escapeHtml(item.partNo) + '</td>' +
+                '<td>' + escapeHtml(item.partName || '-') + '</td>' +
+                '<td class="text-center fw-bold">' + item.qty + '</td>' +
+                '<td class="text-muted small">' + escapeHtml(item.itemNote || '-') + '</td>' +
+                '<td class="text-center">' +
+                '<button type="button" class="btn btn-sm btn-outline-success" data-receive-due-item="' + item.id + '" data-person="' + group.personId + '" title="ทำเครื่องหมายว่ารับของชิ้นนี้แล้ว">' +
+                '<i class="fa-solid fa-check me-1"></i>รับของแล้ว' +
+                '</button>' +
+                '</td>';
+            tbody.appendChild(tr);
+        });
+
+        groupCard.appendChild(table);
+        container.appendChild(groupCard);
+    });
+}
+
+function markItemReceivedInDue(itemId, personId) {
+    const list = ordersCache[personId] || [];
+    const item = list.find(function (x) { return x.id === itemId; });
+    if (!item) return;
+
+    item.received = true;
+    item.receivedDate = todayTh();
+
+    database.ref('orders/' + personId).set(list).then(function () {
+        loadDueAlerts();
+    }).catch(function (err) {
+        console.error('Error updating order:', err);
+        alert('เกิดข้อผิดพลาดในการบันทึก: ' + err.message);
+    });
+}
+
+function markBatchReceivedInDue(batchId, personId) {
+    if (!confirm('ยืนยันว่ารับของทั้งหมดในชุดนี้แล้วหรือไม่?')) return;
+
+    const list = ordersCache[personId] || [];
+    let updated = false;
+
+    list.forEach(function (item) {
+        if (item.batchId === batchId) {
+            item.received = true;
+            item.receivedDate = todayTh();
+            updated = true;
+        }
+    });
+
+    if (!updated) return;
+
+    database.ref('orders/' + personId).set(list).then(function () {
+        loadDueAlerts();
+    }).catch(function (err) {
+        console.error('Error updating batch:', err);
+        alert('เกิดข้อผิดพลาดในการบันทึก: ' + err.message);
+    });
+}
+
+function setupDueAlertsListeners() {
+    const refreshBtn = document.getElementById('btn-refresh-due-alerts');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', function () {
+            loadDueAlerts();
+        });
+    }
+
+    const searchBox = document.getElementById('due-search-box');
+    if (searchBox) {
+        searchBox.addEventListener('input', function (e) {
+            dueAlertsSearchQuery = e.target.value;
+            loadDueAlerts();
+        });
+    }
+
+    const personFilter = document.getElementById('due-person-filter');
+    if (personFilter) {
+        personFilter.addEventListener('change', function (e) {
+            dueAlertsFilterPerson = e.target.value;
+            loadDueAlerts();
+        });
+    }
+
+    const container = document.getElementById('due-alerts-container');
+    if (container) {
+        container.addEventListener('click', function (e) {
+            const receiveItemBtn = e.target.closest('[data-receive-due-item]');
+            if (receiveItemBtn) {
+                const itemId = receiveItemBtn.dataset.receiveDueItem;
+                const personId = receiveItemBtn.dataset.person;
+                markItemReceivedInDue(itemId, personId);
+                return;
+            }
+
+            const receiveBatchBtn = e.target.closest('[data-receive-due-batch]');
+            if (receiveBatchBtn) {
+                const batchId = receiveBatchBtn.dataset.receiveDueBatch;
+                const personId = receiveBatchBtn.dataset.person;
+                markBatchReceivedInDue(batchId, personId);
+                return;
+            }
+
+            const gotoPersonBtn = e.target.closest('[data-goto-person]');
+            if (gotoPersonBtn) {
+                const personId = gotoPersonBtn.dataset.gotoPerson;
+                openPerson(personId);
+                showMenu('list');
+                return;
+            }
+        });
+    }
+}
+
+/* ==========================================================================
+   Calendar & Thai Public Holidays & Daily Notes System
+   ========================================================================== */
+
+const THAI_MONTH_NAMES = [
+    'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน',
+    'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม',
+    'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
+];
+
+const THAI_DAY_NAMES = [
+    'วันอาทิตย์', 'วันจันทร์', 'วันอังคาร', 'วันพุธ', 'วันพฤหัสบดี', 'วันศุกร์', 'วันเสาร์'
+];
+
+let calCurrentDate = new Date();
+let calendarNotesCache = {};
+let isCalInitialized = false;
+let currentCalView = 'general'; // 'general', 'nik', 'som'
+
+// Personal Attendance Cache
+let attendanceCache = {
+    nik: {},
+    som: {}
+};
+
+// Fixed Thai Public Holidays (MM-DD)
+const THAI_FIXED_HOLIDAYS = {
+    '01-01': 'วันขึ้นปีใหม่',
+    '04-06': 'วันจักรี',
+    '04-13': 'วันสงกรานต์',
+    '04-14': 'วันสงกรานต์ (วันครอบครัว)',
+    '04-15': 'วันสงกรานต์',
+    '05-01': 'วันแรงงานแห่งชาติ',
+    '05-04': 'วันฉัตรมงคล',
+    '06-03': 'วันเฉลิมพระชนมพรรษาสมเด็จพระนางเจ้าฯ พระบรมราชินี',
+    '07-28': 'วันเฉลิมพระชนมพรรษาพระบาทสมเด็จพระเจ้าอยู่หัว (ร.10)',
+    '08-12': 'วันแม่แห่งชาติ',
+    '10-13': 'วันนวมินทรมหาราช',
+    '10-23': 'วันปิยมหาราช',
+    '12-05': 'วันพ่อแห่งชาติ / วันชาติ',
+    '12-10': 'วันรัฐธรรมนูญ',
+    '12-31': 'วันสิ้นปี'
+};
+
+// Variable / Lunar Buddhist Holidays by Year (YYYY-MM-DD)
+const THAI_VARIABLE_HOLIDAYS = {
+    // 2024
+    '2024-02-24': 'วันมาฆบูชา',
+    '2024-02-26': 'ชดเชยวันมาฆบูชา',
+    '2024-05-22': 'วันวิสาขบูชา',
+    '2024-07-20': 'วันอาสาฬหบูชา',
+    '2024-07-21': 'วันเข้าพรรษา',
+    '2024-07-22': 'ชดเชยวันอาสาฬหบูชา',
+
+    // 2025
+    '2025-02-12': 'วันมาฆบูชา',
+    '2025-05-11': 'วันวิสาขบูชา',
+    '2025-05-12': 'ชดเชยวันวิสาขบูชา',
+    '2025-07-10': 'วันอาสาฬหบูชา',
+    '2025-07-11': 'วันเข้าพรรษา',
+
+    // 2026
+    '2026-03-03': 'วันมาฆบูชา',
+    '2026-05-31': 'วันวิสาขบูชา',
+    '2026-06-01': 'ชดเชยวันวิสาขบูชา',
+    '2026-07-29': 'วันอาสาฬหบูชา',
+    '2026-07-30': 'วันเข้าพรรษา',
+
+    // 2027
+    '2027-02-21': 'วันมาฆบูชา',
+    '2027-02-22': 'ชดเชยวันมาฆบูชา',
+    '2027-05-20': 'วันวิสาขบูชา',
+    '2027-07-18': 'วันอาสาฬหบูชา',
+    '2027-07-19': 'ชดเชยวันอาสาฬหบูชา',
+    '2027-07-20': 'วันเข้าพรรษา',
+
+    // 2028
+    '2028-02-09': 'วันมาฆบูชา',
+    '2028-05-08': 'วันวิสาขบูชา',
+    '2028-07-06': 'วันอาสาฬหบูชา',
+    '2028-07-07': 'วันเข้าพรรษา'
+};
+
+function formatCalDateYMD(d) {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return year + '-' + month + '-' + day;
+}
+
+function getThaiHolidaysForYear(year) {
+    const holidays = {};
+
+    // 1. Fixed holidays + automatic weekend substitution
+    Object.keys(THAI_FIXED_HOLIDAYS).forEach(function (mmdd) {
+        const dateStr = year + '-' + mmdd;
+        const name = THAI_FIXED_HOLIDAYS[mmdd];
+        holidays[dateStr] = name;
+
+        // Weekend substitution check (exclude Songkran multi-day holiday block)
+        if (mmdd !== '04-13' && mmdd !== '04-14' && mmdd !== '04-15') {
+            const m = parseInt(mmdd.substring(0, 2), 10) - 1;
+            const dayNum = parseInt(mmdd.substring(3, 5), 10);
+            const d = new Date(year, m, dayNum);
+            const dow = d.getDay();
+            if (dow === 6) { // Saturday -> Substitute on Monday (+2)
+                const subDate = new Date(year, m, dayNum + 2);
+                const subStr = formatCalDateYMD(subDate);
+                if (!holidays[subStr]) holidays[subStr] = 'ชดเชย' + name;
+            } else if (dow === 0) { // Sunday -> Substitute on Monday (+1)
+                const subDate = new Date(year, m, dayNum + 1);
+                const subStr = formatCalDateYMD(subDate);
+                if (!holidays[subStr]) holidays[subStr] = 'ชดเชย' + name;
+            }
+        }
+    });
+
+    // Special Songkran substitution
+    const songkranSat = [13, 14, 15].filter(function (d) {
+        return new Date(year, 3, d).getDay() === 6;
+    }).length;
+    const songkranSun = [13, 14, 15].filter(function (d) {
+        return new Date(year, 3, d).getDay() === 0;
+    }).length;
+    if (songkranSat + songkranSun > 0) {
+        const sub1 = formatCalDateYMD(new Date(year, 3, 16));
+        if (!holidays[sub1]) holidays[sub1] = 'ชดเชยวันสงกรานต์';
+        if (songkranSat + songkranSun > 1) {
+            const sub2 = formatCalDateYMD(new Date(year, 3, 17));
+            if (!holidays[sub2]) holidays[sub2] = 'ชดเชยวันสงกรานต์';
+        }
+    }
+
+    // 2. Variable Buddhist holidays
+    Object.keys(THAI_VARIABLE_HOLIDAYS).forEach(function (dateStr) {
+        if (dateStr.startsWith(year + '-')) {
+            holidays[dateStr] = THAI_VARIABLE_HOLIDAYS[dateStr];
+        }
+    });
+
+    return holidays;
+}
+
+function initCalendarView() {
+    if (isCalInitialized) {
+        renderCalendar();
+        return;
+    }
+    isCalInitialized = true;
+
+    // Populate Year and Month Selectors
+    const monthSelect = document.getElementById('cal-select-month');
+    const yearSelect = document.getElementById('cal-select-year');
+
+    if (monthSelect) {
+        monthSelect.innerHTML = '';
+        THAI_MONTH_NAMES.forEach(function (name, index) {
+            const opt = document.createElement('option');
+            opt.value = index;
+            opt.textContent = name;
+            monthSelect.appendChild(opt);
+        });
+    }
+
+    if (yearSelect) {
+        yearSelect.innerHTML = '';
+        const curYear = new Date().getFullYear();
+        for (let y = curYear - 2; y <= curYear + 4; y++) {
+            const opt = document.createElement('option');
+            opt.value = y;
+            opt.textContent = (y + 543) + ' (' + y + ')';
+            yearSelect.appendChild(opt);
+        }
+    }
+
+    // Attach Event Listeners for Personal Mode Sub-tabs (Protected with PIN)
+    document.querySelectorAll('.cal-mode-navigation [data-cal-view]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            requestCalendarViewMode(btn.dataset.calView);
+        });
+    });
+
+    // Month & Year Navigators
+    const prevBtn = document.getElementById('cal-prev-month');
+    if (prevBtn) {
+        prevBtn.addEventListener('click', function () {
+            calCurrentDate.setMonth(calCurrentDate.getMonth() - 1);
+            renderCalendar();
+        });
+    }
+
+    const nextBtn = document.getElementById('cal-next-month');
+    if (nextBtn) {
+        nextBtn.addEventListener('click', function () {
+            calCurrentDate.setMonth(calCurrentDate.getMonth() + 1);
+            renderCalendar();
+        });
+    }
+
+    const todayBtn = document.getElementById('cal-today-btn');
+    if (todayBtn) {
+        todayBtn.addEventListener('click', function () {
+            calCurrentDate = new Date();
+            renderCalendar();
+        });
+    }
+
+    if (monthSelect) {
+        monthSelect.addEventListener('change', function () {
+            calCurrentDate.setMonth(parseInt(monthSelect.value, 10));
+            renderCalendar();
+        });
+    }
+
+    if (yearSelect) {
+        yearSelect.addEventListener('change', function () {
+            calCurrentDate.setFullYear(parseInt(yearSelect.value, 10));
+            renderCalendar();
+        });
+    }
+
+    // Quick Add Note Button
+    const quickAddBtn = document.getElementById('cal-btn-quick-add-note');
+    if (quickAddBtn) {
+        quickAddBtn.addEventListener('click', function () {
+            const todayStr = formatCalDateYMD(new Date());
+            openCalendarDayModal(todayStr);
+        });
+    }
+
+    // Modal Attendance Toggle Buttons & Boxes for Nik & Som
+    document.querySelectorAll('.btn-attendance-toggle[data-person-work]').forEach(function (btn) {
+        btn.addEventListener('click', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            const personKey = btn.dataset.personWork;
+            const dateStr = document.getElementById('cal-note-selected-date').value || calSelectedDateStr;
+            if (personKey && dateStr) {
+                toggleWorkAttendance(personKey, dateStr);
+            }
+        });
+    });
+
+    ['nik', 'som'].forEach(function (personKey) {
+        const box = document.getElementById('box-attendance-' + personKey);
+        if (box) {
+            box.style.cursor = 'pointer';
+            box.addEventListener('click', function (e) {
+                if (e.target.closest('.btn-attendance-toggle')) return;
+                const dateStr = document.getElementById('cal-note-selected-date').value || calSelectedDateStr;
+                if (dateStr) {
+                    toggleWorkAttendance(personKey, dateStr);
+                }
+            });
+        }
+    });
+
+    // Modal Close Buttons
+    const closeModalBtn = document.getElementById('btn-close-cal-modal');
+    if (closeModalBtn) {
+        closeModalBtn.addEventListener('click', closeCalendarDayModal);
+    }
+
+    const calModal = document.getElementById('calendar-day-modal');
+    if (calModal) {
+        calModal.addEventListener('click', function (e) {
+            if (e.target === calModal) closeCalendarDayModal();
+        });
+    }
+
+    // Save Note Button
+    const saveNoteBtn = document.getElementById('cal-btn-save-note');
+    if (saveNoteBtn) {
+        saveNoteBtn.addEventListener('click', saveCalendarNote);
+    }
+
+    // Cancel Edit Note Button
+    const cancelEditBtn = document.getElementById('cal-btn-cancel-edit-note');
+    if (cancelEditBtn) {
+        cancelEditBtn.addEventListener('click', function () {
+            resetCalendarNoteForm();
+        });
+    }
+
+    // Calendar Grid Delegated Click Listener
+    const daysGrid = document.getElementById('calendar-days-grid');
+    if (daysGrid) {
+        daysGrid.addEventListener('click', function (e) {
+            // Check if user clicked quick attendance toggle icon
+            const quickToggleBtn = e.target.closest('[data-toggle-work]');
+            if (quickToggleBtn && (currentCalView === 'nik' || currentCalView === 'som')) {
+                e.stopPropagation();
+                toggleWorkAttendance(currentCalView, quickToggleBtn.dataset.toggleWork);
+                return;
+            }
+
+            const dayCell = e.target.closest('.calendar-day-cell');
+            if (dayCell && dayCell.dataset.date) {
+                openCalendarDayModal(dayCell.dataset.date);
+            }
+        });
+    }
+
+    // Modal Notes List Delegated Actions (Edit & Delete)
+    const modalNotesList = document.getElementById('cal-modal-notes-list');
+    if (modalNotesList) {
+        modalNotesList.addEventListener('click', function (e) {
+            const editBtn = e.target.closest('[data-edit-cal-note]');
+            const delBtn = e.target.closest('[data-del-cal-note]');
+
+            if (editBtn) {
+                const noteId = editBtn.dataset.editCalNote;
+                editCalendarNote(noteId);
+                return;
+            }
+
+            if (delBtn) {
+                const noteId = delBtn.dataset.delCalNote;
+                deleteCalendarNote(noteId);
+                return;
+            }
+        });
+    }
+
+    // Load initial notes & attendance
+    loadCalendarNotes();
+    loadAttendanceData();
+}
+
+function setCalendarViewMode(mode) {
+    currentCalView = mode;
+
+    // Update active state in sub-tabs
+    document.querySelectorAll('.cal-mode-navigation [data-cal-view]').forEach(function (btn) {
+        btn.classList.toggle('active', btn.dataset.calView === mode);
+    });
+
+    const headerTitle = document.getElementById('calendar-header-title');
+    const headerBadge = document.getElementById('calendar-header-badge');
+    const headerSub = document.getElementById('calendar-header-subtitle');
+    const headerIcon = document.getElementById('calendar-header-icon');
+    const headerIconBox = document.getElementById('calendar-header-icon-box');
+
+    const chipWorkNik = document.getElementById('chip-work-nik');
+    const chipWorkSom = document.getElementById('chip-work-som');
+    const legendNik = document.getElementById('legend-item-nik');
+    const legendSom = document.getElementById('legend-item-som');
+
+    if (mode === 'nik') {
+        if (headerTitle) headerTitle.textContent = 'ปฏิทินส่วนตัวของนิก';
+        if (headerBadge) {
+            headerBadge.innerHTML = '<i class="fa-solid fa-user-check me-1"></i>เช็ควันมาทำงาน & สรุปวันทำงานของนิก';
+            headerBadge.className = 'badge rounded-pill cal-feature-badge bg-primary-subtle text-primary border border-primary-subtle';
+        }
+        if (headerSub) headerSub.textContent = 'คลิกวันที่เพื่อบันทึกว่ามาทำงาน และสรุปผลรวมวันที่มาทำงานทั้งหมดของนิก';
+        if (headerIcon) headerIcon.className = 'fa-solid fa-user-check';
+        if (headerIconBox) headerIconBox.style.background = 'linear-gradient(135deg, #2563eb, #1d4ed8)';
+
+        if (chipWorkNik) chipWorkNik.classList.remove('hidden');
+        if (chipWorkSom) chipWorkSom.classList.add('hidden');
+        if (legendNik) legendNik.classList.remove('hidden');
+        if (legendSom) legendSom.classList.add('hidden');
+    } else if (mode === 'som') {
+        if (headerTitle) headerTitle.textContent = 'ปฏิทินส่วนตัวของส้ม';
+        if (headerBadge) {
+            headerBadge.innerHTML = '<i class="fa-solid fa-user-tag me-1"></i>เช็ควันมาทำงาน & สรุปวันทำงานของส้ม';
+            headerBadge.className = 'badge rounded-pill cal-feature-badge bg-warning-subtle text-warning-emphasis border border-warning-subtle';
+        }
+        if (headerSub) headerSub.textContent = 'คลิกวันที่เพื่อบันทึกว่ามาทำงาน และสรุปผลรวมวันที่มาทำงานทั้งหมดของส้ม';
+        if (headerIcon) headerIcon.className = 'fa-solid fa-user-tag';
+        if (headerIconBox) headerIconBox.style.background = 'linear-gradient(135deg, #d97706, #b45309)';
+
+        if (chipWorkNik) chipWorkNik.classList.add('hidden');
+        if (chipWorkSom) chipWorkSom.classList.remove('hidden');
+        if (legendNik) legendNik.classList.add('hidden');
+        if (legendSom) legendSom.classList.remove('hidden');
+    } else {
+        // General Mode: Clean calendar view without personal attendance names
+        if (headerTitle) headerTitle.textContent = 'ปฏิทิน & วันหยุดนักขัตฤกษ์';
+        if (headerBadge) {
+            headerBadge.innerHTML = '<i class="fa-solid fa-note-sticky me-1"></i>บันทึก Note ประจำวันได้';
+            headerBadge.className = 'badge rounded-pill cal-feature-badge';
+        }
+        if (headerSub) headerSub.textContent = 'แสดงวันหยุดราชการไทย พร้อมระบบจดบันทึกงานประจำวัน';
+        if (headerIcon) headerIcon.className = 'fa-solid fa-calendar-days';
+        if (headerIconBox) headerIconBox.style.background = 'linear-gradient(135deg, #2563eb, #1d4ed8)';
+
+        if (chipWorkNik) chipWorkNik.classList.add('hidden');
+        if (chipWorkSom) chipWorkSom.classList.add('hidden');
+        if (legendNik) legendNik.classList.add('hidden');
+        if (legendSom) legendSom.classList.add('hidden');
+    }
+
+    renderCalendar();
+}
+
+function normalizeAttendanceMap(rawObj) {
+    if (!rawObj || typeof rawObj !== 'object') return {};
+    const normalized = {};
+    Object.keys(rawObj).forEach(function (k) {
+        const standardKey = k.replace(/_/g, '-');
+        if (rawObj[k] && rawObj[k].attended) {
+            normalized[standardKey] = rawObj[k];
+            normalized[standardKey].date = standardKey;
+        }
+    });
+    return normalized;
+}
+
+function loadAttendanceData() {
+    // 1. Load from LocalStorage
+    try {
+        const localNik = localStorage.getItem('isuzu_attendance_nik');
+        if (localNik) attendanceCache.nik = normalizeAttendanceMap(JSON.parse(localNik));
+
+        const localSom = localStorage.getItem('isuzu_attendance_som');
+        if (localSom) attendanceCache.som = normalizeAttendanceMap(JSON.parse(localSom));
+    } catch (e) {
+        console.warn('LocalStorage error loading attendance:', e);
+    }
+
+    // 2. Realtime sync with Firebase
+    try {
+        if (typeof database !== 'undefined') {
+            database.ref('calendarAttendance').on('value', function (snapshot) {
+                const data = snapshot.val();
+                if (data) {
+                    attendanceCache.nik = normalizeAttendanceMap(data.nik || {});
+                    attendanceCache.som = normalizeAttendanceMap(data.som || {});
+
+                    try {
+                        localStorage.setItem('isuzu_attendance_nik', JSON.stringify(attendanceCache.nik));
+                        localStorage.setItem('isuzu_attendance_som', JSON.stringify(attendanceCache.som));
+                    } catch (err) {}
+                }
+                renderCalendar();
+
+                // If modal is currently open, update modal UI
+                const modal = document.getElementById('calendar-day-modal');
+                const selectedDateInput = document.getElementById('cal-note-selected-date');
+                if (modal && !modal.classList.contains('hidden') && selectedDateInput && selectedDateInput.value) {
+                    updateModalAttendanceUI(selectedDateInput.value);
+                }
+            }, function (error) {
+                console.warn('Firebase attendance sync error:', error);
+            });
+        }
+    } catch (e) {
+        console.warn('Firebase attendance setup error:', e);
+    }
+}
+
+function toggleWorkAttendance(personKey, dateStr) {
+    if (!personKey || !dateStr) return;
+    if (!attendanceCache[personKey]) attendanceCache[personKey] = {};
+
+    const isAttended = !!(attendanceCache[personKey][dateStr] && attendanceCache[personKey][dateStr].attended);
+    const newStatus = !isAttended;
+
+    if (newStatus) {
+        attendanceCache[personKey][dateStr] = {
+            attended: true,
+            date: dateStr,
+            person: personKey,
+            timestamp: new Date().toISOString()
+        };
+    } else {
+        delete attendanceCache[personKey][dateStr];
+    }
+
+    // Save to LocalStorage
+    try {
+        localStorage.setItem('isuzu_attendance_' + personKey, JSON.stringify(attendanceCache[personKey]));
+    } catch (e) {}
+
+    // Save to Firebase
+    if (typeof database !== 'undefined') {
+        const standardRef = database.ref('calendarAttendance/' + personKey + '/' + dateStr);
+        const legacyRef = database.ref('calendarAttendance/' + personKey + '/' + dateStr.replace(/-/g, '_'));
+
+        if (newStatus) {
+            standardRef.set(attendanceCache[personKey][dateStr]).catch(function (err) {
+                console.warn('Firebase attendance update error:', err);
+            });
+        } else {
+            standardRef.remove().catch(function (err) {
+                console.warn('Firebase attendance remove error:', err);
+            });
+            legacyRef.remove().catch(function () {});
+        }
+    }
+
+    updateModalAttendanceUI(dateStr);
+    renderCalendar();
+}
+
+function getAttendanceStats(personKey, year, month) {
+    const data = attendanceCache[personKey] || {};
+    let totalCount = 0;
+    let monthCount = 0;
+
+    const padMonth = String(month + 1).padStart(2, '0');
+    const monthPrefix = year + '-' + padMonth;
+
+    Object.keys(data).forEach(function (dateStr) {
+        if (data[dateStr] && data[dateStr].attended) {
+            totalCount++;
+            if (dateStr.startsWith(monthPrefix)) {
+                monthCount++;
+            }
+        }
+    });
+
+    return { monthCount: monthCount, totalCount: totalCount };
+}
+
+function updateModalAttendanceUI(dateStr) {
+    const panel = document.getElementById('cal-modal-attendance-panel');
+    if (!panel) return;
+
+    // In General Calendar mode, hide personal attendance panel completely
+    if (currentCalView !== 'nik' && currentCalView !== 'som') {
+        panel.classList.add('hidden');
+        return;
+    }
+
+    panel.classList.remove('hidden');
+
+    const titleEl = document.getElementById('cal-modal-attendance-title');
+    const colNik = document.getElementById('col-attendance-nik');
+    const colSom = document.getElementById('col-attendance-som');
+
+    if (currentCalView === 'nik') {
+        if (titleEl) titleEl.textContent = 'บันทึกการมาทำงานของนิก';
+        if (colNik) colNik.classList.remove('hidden');
+        if (colSom) colSom.classList.add('hidden');
+
+        const isNikAttended = !!(attendanceCache.nik && attendanceCache.nik[dateStr] && attendanceCache.nik[dateStr].attended);
+        const boxNik = document.getElementById('box-attendance-nik');
+        const badgeNik = document.getElementById('badge-attendance-nik');
+        const btnNik = document.getElementById('btn-work-nik');
+
+        if (boxNik) {
+            boxNik.classList.toggle('is-checked', isNikAttended);
+        }
+        if (badgeNik) {
+            if (isNikAttended) {
+                badgeNik.className = 'badge bg-success text-white attendance-pill';
+                badgeNik.innerHTML = '<i class="fa-solid fa-check me-1"></i>มาทำงานแล้ว';
+            } else {
+                badgeNik.className = 'badge bg-secondary text-white attendance-pill';
+                badgeNik.textContent = 'ยังไม่ได้บันทึก';
+            }
+        }
+        if (btnNik) {
+            if (isNikAttended) {
+                btnNik.className = 'btn btn-sm w-100 btn-success btn-attendance-toggle is-active';
+                btnNik.innerHTML = '<i class="fa-solid fa-check-double me-1"></i><span id="text-work-nik">✓ มาทำงานแล้ว (คลิกยกเลิก)</span>';
+            } else {
+                btnNik.className = 'btn btn-sm w-100 btn-outline-primary btn-attendance-toggle';
+                btnNik.innerHTML = '<i class="fa-solid fa-calendar-check me-1"></i><span id="text-work-nik">บันทึกว่ามาทำงาน</span>';
+            }
+        }
+    } else if (currentCalView === 'som') {
+        if (titleEl) titleEl.textContent = 'บันทึกการมาทำงานของส้ม';
+        if (colSom) colSom.classList.remove('hidden');
+        if (colNik) colNik.classList.add('hidden');
+
+        const isSomAttended = !!(attendanceCache.som && attendanceCache.som[dateStr] && attendanceCache.som[dateStr].attended);
+        const boxSom = document.getElementById('box-attendance-som');
+        const badgeSom = document.getElementById('badge-attendance-som');
+        const btnSom = document.getElementById('btn-work-som');
+
+        if (boxSom) {
+            boxSom.classList.toggle('is-checked', isSomAttended);
+        }
+        if (badgeSom) {
+            if (isSomAttended) {
+                badgeSom.className = 'badge bg-warning text-dark attendance-pill fw-bold';
+                badgeSom.innerHTML = '<i class="fa-solid fa-check me-1"></i>มาทำงานแล้ว';
+            } else {
+                badgeSom.className = 'badge bg-secondary text-white attendance-pill';
+                badgeSom.textContent = 'ยังไม่ได้บันทึก';
+            }
+        }
+        if (btnSom) {
+            if (isSomAttended) {
+                btnSom.className = 'btn btn-sm w-100 btn-warning text-dark fw-bold btn-attendance-toggle is-active';
+                btnSom.innerHTML = '<i class="fa-solid fa-check-double me-1"></i><span id="text-work-som">✓ มาทำงานแล้ว (คลิกยกเลิก)</span>';
+            } else {
+                btnSom.className = 'btn btn-sm w-100 btn-outline-warning btn-attendance-toggle';
+                btnSom.innerHTML = '<i class="fa-solid fa-calendar-check me-1"></i><span id="text-work-som">บันทึกว่ามาทำงาน</span>';
+            }
+        }
+    }
+}
+
+function loadCalendarNotes() {
+    // 1. Try loading from LocalStorage first for instant render
+    try {
+        const local = localStorage.getItem('isuzu_calendar_notes');
+        if (local) {
+            calendarNotesCache = JSON.parse(local) || {};
+        }
+    } catch (e) {
+        console.warn('LocalStorage error loading calendar notes:', e);
+    }
+
+    renderCalendar();
+
+    // 2. Realtime sync from Firebase if available
+    try {
+        if (typeof database !== 'undefined') {
+            database.ref('calendarNotes').on('value', function (snapshot) {
+                const data = snapshot.val();
+                if (data) {
+                    calendarNotesCache = data;
+                    try {
+                        localStorage.setItem('isuzu_calendar_notes', JSON.stringify(data));
+                    } catch (err) {}
+                } else if (!data) {
+                    calendarNotesCache = {};
+                }
+                renderCalendar();
+
+                // If modal is open, re-render modal notes
+                const modal = document.getElementById('calendar-day-modal');
+                const selectedDateInput = document.getElementById('cal-note-selected-date');
+                if (modal && !modal.classList.contains('hidden') && selectedDateInput && selectedDateInput.value) {
+                    renderModalNotesList(selectedDateInput.value);
+                }
+            }, function (error) {
+                console.warn('Firebase calendarNotes error:', error);
+            });
+        }
+    } catch (e) {
+        console.warn('Firebase setup error for calendarNotes:', e);
+    }
+}
+
+function renderCalendar() {
+    const grid = document.getElementById('calendar-days-grid');
+    if (!grid) return;
+
+    const year = calCurrentDate.getFullYear();
+    const month = calCurrentDate.getMonth();
+
+    // Update Selectors
+    const monthSelect = document.getElementById('cal-select-month');
+    const yearSelect = document.getElementById('cal-select-year');
+    if (monthSelect) monthSelect.value = month;
+    if (yearSelect) yearSelect.value = year;
+
+    // Get Thai Holidays for this year
+    const holidays = getThaiHolidaysForYear(year);
+
+    // Days in current month
+    const firstDayOfMonth = new Date(year, month, 1);
+    const lastDayOfMonth = new Date(year, month + 1, 0);
+    const daysInMonth = lastDayOfMonth.getDate();
+    const startingDayOfWeek = firstDayOfMonth.getDay(); // 0 = Sun, 6 = Sat
+
+    // Days from previous month to fill first row
+    const prevMonthLastDay = new Date(year, month, 0).getDate();
+
+    grid.innerHTML = '';
+
+    const todayStr = formatCalDateYMD(new Date());
+    let monthHolidaysCount = 0;
+    let monthNotesCount = 0;
+
+    // Calculate attendance stats exclusively for active personal view
+    if (currentCalView === 'nik') {
+        const nikStats = getAttendanceStats('nik', year, month);
+        const nikMonthEl = document.getElementById('cal-stat-nik-month');
+        const nikTotalEl = document.getElementById('cal-stat-nik-total');
+        if (nikMonthEl) nikMonthEl.textContent = nikStats.monthCount;
+        if (nikTotalEl) nikTotalEl.textContent = nikStats.totalCount;
+    } else if (currentCalView === 'som') {
+        const somStats = getAttendanceStats('som', year, month);
+        const somMonthEl = document.getElementById('cal-stat-som-month');
+        const somTotalEl = document.getElementById('cal-stat-som-total');
+        if (somMonthEl) somMonthEl.textContent = somStats.monthCount;
+        if (somTotalEl) somTotalEl.textContent = somStats.totalCount;
+    }
+
+    // 1. Previous month padded days
+    for (let i = startingDayOfWeek - 1; i >= 0; i--) {
+        const dayNum = prevMonthLastDay - i;
+        const prevDate = new Date(year, month - 1, dayNum);
+        const dateStr = formatCalDateYMD(prevDate);
+        const cell = createCalendarDayCell(prevDate, dateStr, dayNum, true, holidays);
+        grid.appendChild(cell);
+    }
+
+    // 2. Current month days
+    for (let day = 1; day <= daysInMonth; day++) {
+        const curDate = new Date(year, month, day);
+        const dateStr = formatCalDateYMD(curDate);
+        const isHoliday = !!holidays[dateStr];
+        const dayNotes = getNotesForDate(dateStr);
+
+        if (isHoliday) monthHolidaysCount++;
+        monthNotesCount += dayNotes.length;
+
+        const cell = createCalendarDayCell(curDate, dateStr, day, false, holidays);
+        grid.appendChild(cell);
+    }
+
+    // 3. Next month padded days to complete grid
+    const totalCells = startingDayOfWeek + daysInMonth;
+    const totalGridSlots = totalCells <= 35 ? 35 : 42;
+    const remainingSlots = totalGridSlots - totalCells;
+
+    for (let day = 1; day <= remainingSlots; day++) {
+        const nextDate = new Date(year, month + 1, day);
+        const dateStr = formatCalDateYMD(nextDate);
+        const cell = createCalendarDayCell(nextDate, dateStr, day, true, holidays);
+        grid.appendChild(cell);
+    }
+
+    // Update stats bar
+    const holidayStat = document.getElementById('cal-stat-holidays');
+    if (holidayStat) holidayStat.textContent = monthHolidaysCount;
+
+    const noteStat = document.getElementById('cal-stat-notes');
+    if (noteStat) noteStat.textContent = monthNotesCount;
+}
+
+function getNotesForDate(dateStr) {
+    if (!calendarNotesCache) return [];
+    return Object.keys(calendarNotesCache)
+        .map(function (k) { return calendarNotesCache[k]; })
+        .filter(function (n) {
+            if (!n || n.date !== dateStr) return false;
+            return true;
+        })
+        .sort(function (a, b) { return (a.createdAt || '').localeCompare(b.createdAt || ''); });
+}
+
+function createCalendarDayCell(dateObj, dateStr, dayNum, isOtherMonth, holidays) {
+    const cell = document.createElement('div');
+    cell.className = 'calendar-day-cell';
+    cell.dataset.date = dateStr;
+
+    const todayStr = formatCalDateYMD(new Date());
+    const isToday = (dateStr === todayStr);
+    const holidayName = holidays[dateStr];
+    const notes = getNotesForDate(dateStr);
+
+    // Personal Attendance Check (Only for the active personal calendar)
+    let isAttended = false;
+    if (currentCalView === 'nik') {
+        isAttended = !!(attendanceCache.nik && attendanceCache.nik[dateStr] && attendanceCache.nik[dateStr].attended);
+    } else if (currentCalView === 'som') {
+        isAttended = !!(attendanceCache.som && attendanceCache.som[dateStr] && attendanceCache.som[dateStr].attended);
+    }
+
+    if (isOtherMonth) cell.classList.add('other-month');
+    if (isToday) cell.classList.add('is-today');
+    if (holidayName) cell.classList.add('is-holiday');
+    if (isAttended) cell.classList.add('is-attended-day');
+    if (notes.length > 0) cell.classList.add('has-notes');
+
+    // Day Cell Inner Header
+    let cellHtml =
+        '<div class="day-cell-header">' +
+            '<span class="day-number' + (isToday ? ' today-number' : '') + '">' + dayNum + '</span>' +
+            '<div class="d-flex align-items-center gap-1">' +
+                (currentCalView === 'nik' && isAttended ? '<span class="attended-header-pill" title="นิกมาทำงานแล้ว"><i class="fa-solid fa-check"></i></span>' : '') +
+                (currentCalView === 'som' && isAttended ? '<span class="attended-header-pill" style="background:#f59e0b;" title="ส้มมาทำงานแล้ว"><i class="fa-solid fa-check"></i></span>' : '') +
+                (isToday ? '<span class="today-badge">วันนี้</span>' : '') +
+            '</div>' +
+        '</div>';
+
+    // Day Content
+    cellHtml += '<div class="day-cell-content">';
+
+    // Show Attendance Badge exclusively in personal view
+    if (currentCalView === 'nik' && isAttended) {
+        cellHtml +=
+            '<div class="cal-attendance-badge" title="บันทึกว่ามาทำงานแล้ว">' +
+                '<i class="fa-solid fa-circle-check me-1"></i>มาทำงาน' +
+            '</div>';
+    } else if (currentCalView === 'som' && isAttended) {
+        cellHtml +=
+            '<div class="cal-attendance-badge" style="background:#fef3c7;border-color:#fde68a;color:#92400e;" title="บันทึกว่ามาทำงานแล้ว">' +
+                '<i class="fa-solid fa-circle-check me-1"></i>มาทำงาน' +
+            '</div>';
+    }
+
+    if (holidayName) {
+        cellHtml +=
+            '<div class="cal-holiday-tag" title="' + escapeHtml(holidayName) + '">' +
+                '<i class="fa-solid fa-flag me-1"></i>' + escapeHtml(holidayName) +
+            '</div>';
+    }
+
+    if (notes.length > 0) {
+        const maxChips = isAttended ? 1 : 2;
+        notes.slice(0, maxChips).forEach(function (note) {
+            const catBadge = getCategoryBadgeStyle(note.category);
+            cellHtml +=
+                '<div class="cal-note-chip ' + catBadge.className + '" title="' + escapeHtml(note.text) + '">' +
+                    catBadge.icon + ' ' + escapeHtml(note.text) +
+                '</div>';
+        });
+
+        if (notes.length > maxChips) {
+            cellHtml +=
+                '<div class="cal-note-more-badge">+' + (notes.length - maxChips) + ' รายการ</div>';
+        }
+    }
+
+    cellHtml += '</div>';
+
+    // Action button on cell
+    if (currentCalView === 'nik' || currentCalView === 'som') {
+        cellHtml +=
+            '<button type="button" class="day-cell-work-toggle ' + (isAttended ? 'is-active' : '') + '" data-toggle-work="' + dateStr + '" title="' + (isAttended ? 'ยกเลิกมาทำงาน' : 'ติ๊กมาทำงาน') + '">' +
+                '<i class="fa-solid ' + (isAttended ? 'fa-check' : 'fa-plus') + '"></i>' +
+            '</button>';
+    } else {
+        cellHtml += '<button type="button" class="day-cell-add-btn" title="เพิ่ม Note"><i class="fa-solid fa-plus"></i></button>';
+    }
+
+    cell.innerHTML = cellHtml;
+    return cell;
+}
+
+function getCategoryBadgeStyle(category) {
+    switch (category) {
+        case 'order':
+            return { className: 'cat-order', icon: '<i class="fa-solid fa-box"></i>', label: 'สั่งของ' };
+        case 'urgent':
+            return { className: 'cat-urgent', icon: '<i class="fa-solid fa-bolt"></i>', label: 'ด่วน' };
+        case 'appointment':
+            return { className: 'cat-appointment', icon: '<i class="fa-solid fa-handshake"></i>', label: 'นัดหมาย' };
+        case 'leave':
+            return { className: 'cat-leave', icon: '<i class="fa-solid fa-umbrella-beach"></i>', label: 'ลาหยุด' };
+        default:
+            return { className: 'cat-general', icon: '<i class="fa-solid fa-thumbtack"></i>', label: 'ทั่วไป' };
+    }
+}
+
+function openCalendarDayModal(dateStr) {
+    calSelectedDateStr = dateStr;
+    const modal = document.getElementById('calendar-day-modal');
+    if (!modal) return;
+
+    const parts = dateStr.split('-');
+    const year = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10) - 1;
+    const day = parseInt(parts[2], 10);
+    const d = new Date(year, month, day);
+
+    // Formatted Thai Title: "วันจันทร์ที่ 12 ตุลาคม 2569"
+    const thaiDayName = THAI_DAY_NAMES[d.getDay()];
+    const thaiMonthName = THAI_MONTH_NAMES[month];
+    const thaiYear = year + 543;
+    const titleText = thaiDayName + 'ที่ ' + day + ' ' + thaiMonthName + ' ' + thaiYear;
+
+    const dateTitle = document.getElementById('cal-modal-date-title');
+    if (dateTitle) {
+        dateTitle.innerHTML = '<i class="fa-solid fa-calendar-day me-2 text-primary"></i>' + titleText;
+    }
+
+    // Holiday Check
+    const holidays = getThaiHolidaysForYear(year);
+    const holidayName = holidays[dateStr];
+    const holidayBanner = document.getElementById('cal-modal-holiday-banner');
+    const holidayNameEl = document.getElementById('cal-modal-holiday-name');
+
+    if (holidayBanner && holidayNameEl) {
+        if (holidayName) {
+            holidayNameEl.textContent = 'วันหยุดนักขัตฤกษ์: ' + holidayName;
+            holidayBanner.classList.remove('hidden');
+        } else {
+            holidayBanner.classList.add('hidden');
+        }
+    }
+
+    // Set Date in hidden input
+    document.getElementById('cal-note-selected-date').value = dateStr;
+
+    // Update Attendance Section in Modal
+    updateModalAttendanceUI(dateStr);
+
+    // Reset Note Form
+    resetCalendarNoteForm();
+
+    // Render list of notes for this day
+    renderModalNotesList(dateStr);
+
+    // Show Modal
+    modal.classList.remove('hidden');
+}
+
+function closeCalendarDayModal() {
+    const modal = document.getElementById('calendar-day-modal');
+    if (modal) modal.classList.add('hidden');
+    resetCalendarNoteForm();
+}
+
+function renderModalNotesList(dateStr) {
+    const container = document.getElementById('cal-modal-notes-list');
+    const countSpan = document.getElementById('cal-modal-notes-count');
+    if (!container) return;
+
+    const notes = getNotesForDate(dateStr);
+    if (countSpan) countSpan.textContent = notes.length;
+
+    if (notes.length === 0) {
+        container.innerHTML =
+            '<div class="text-center text-muted py-4">' +
+                '<i class="fa-solid fa-file-pen fa-2x mb-2 text-secondary opacity-50"></i>' +
+                '<p class="small mb-0">ยังไม่มี Note บันทึกไว้ในวันนี้ คุณสามารถพิมพ์บันทึกใหม่ด้านล่างได้เลย</p>' +
+            '</div>';
+        return;
+    }
+
+    let html = '';
+    notes.forEach(function (n) {
+        const cat = getCategoryBadgeStyle(n.category);
+        html +=
+            '<div class="cal-modal-note-item p-3 mb-2" id="note-item-' + n.id + '">' +
+                '<div class="d-flex justify-content-between align-items-start gap-2 mb-1">' +
+                    '<div class="d-flex align-items-center gap-2 flex-wrap">' +
+                        '<span class="cal-category-pill ' + cat.className + '">' +
+                            cat.icon + ' ' + cat.label +
+                        '</span>' +
+                        (n.author ? '<span class="small fw-semibold text-primary"><i class="fa-solid fa-user me-1"></i>' + escapeHtml(n.author) + '</span>' : '') +
+                        (n.time ? '<span class="small text-muted"><i class="fa-solid fa-clock me-1"></i>' + escapeHtml(n.time) + '</span>' : '') +
+                    '</div>' +
+                    '<div class="d-flex align-items-center gap-1">' +
+                        '<button type="button" class="btn btn-sm btn-outline-primary btn-note-action" data-edit-cal-note="' + n.id + '" title="แก้ไข">' +
+                            '<i class="fa-solid fa-pen"></i>' +
+                        '</button>' +
+                        '<button type="button" class="btn btn-sm btn-outline-danger btn-note-action" data-del-cal-note="' + n.id + '" title="ลบ">' +
+                            '<i class="fa-solid fa-trash"></i>' +
+                        '</button>' +
+                    '</div>' +
+                '</div>' +
+                '<div class="cal-note-text-body mt-2">' + escapeHtml(n.text).replace(/\n/g, '<br>') + '</div>' +
+            '</div>';
+    });
+
+    container.innerHTML = html;
+}
+
+function resetCalendarNoteForm() {
+    editingCalNoteId = null;
+    const formTitle = document.getElementById('cal-form-title');
+    const inputEditId = document.getElementById('cal-note-edit-id');
+    const inputText = document.getElementById('cal-note-input-text');
+    const inputCategory = document.getElementById('cal-note-category');
+    const inputAuthor = document.getElementById('cal-note-author');
+    const btnCancel = document.getElementById('cal-btn-cancel-edit-note');
+    const btnSave = document.getElementById('cal-btn-save-note');
+
+    if (formTitle) formTitle.textContent = 'เพิ่ม Note ประจำวันนี้';
+    if (inputEditId) inputEditId.value = '';
+    if (inputText) inputText.value = '';
+    if (inputCategory) inputCategory.value = 'general';
+    if (inputAuthor) {
+        if (currentCalView === 'nik') {
+            inputAuthor.value = 'นิก';
+        } else if (currentCalView === 'som') {
+            inputAuthor.value = 'พี่ส้ม';
+        } else if (currentPerson && PEOPLE && PEOPLE[currentPerson]) {
+            inputAuthor.value = PEOPLE[currentPerson].name;
+        } else {
+            inputAuthor.value = '';
+        }
+    }
+    if (btnCancel) btnCancel.classList.add('hidden');
+    if (btnSave) btnSave.innerHTML = '<i class="fa-solid fa-check me-1"></i>บันทึก Note';
+}
+
+function editCalendarNote(noteId) {
+    const note = calendarNotesCache[noteId];
+    if (!note) return;
+
+    editingCalNoteId = noteId;
+    const formTitle = document.getElementById('cal-form-title');
+    const inputEditId = document.getElementById('cal-note-edit-id');
+    const inputText = document.getElementById('cal-note-input-text');
+    const inputCategory = document.getElementById('cal-note-category');
+    const inputAuthor = document.getElementById('cal-note-author');
+    const btnCancel = document.getElementById('cal-btn-cancel-edit-note');
+    const btnSave = document.getElementById('cal-btn-save-note');
+
+    if (formTitle) formTitle.textContent = 'แก้ไข Note';
+    if (inputEditId) inputEditId.value = noteId;
+    if (inputText) {
+        inputText.value = note.text;
+        inputText.focus();
+    }
+    if (inputCategory) inputCategory.value = note.category || 'general';
+    if (inputAuthor) inputAuthor.value = note.author || '';
+    if (btnCancel) btnCancel.classList.remove('hidden');
+    if (btnSave) btnSave.innerHTML = '<i class="fa-solid fa-check me-1"></i>อัปเดต Note';
+
+    // Scroll form into view smoothly
+    const formCard = document.querySelector('.calendar-form-card');
+    if (formCard) formCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function saveCalendarNote() {
+    const dateStr = document.getElementById('cal-note-selected-date').value;
+    const text = document.getElementById('cal-note-input-text').value.trim();
+    const category = document.getElementById('cal-note-category').value;
+    const author = document.getElementById('cal-note-author').value.trim();
+
+    if (!text) {
+        alert('กรุณากรอกข้อความ Note');
+        document.getElementById('cal-note-input-text').focus();
+        return;
+    }
+
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+
+    let noteId = editingCalNoteId;
+    if (!noteId) {
+        noteId = 'calnote_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+    }
+
+    let defaultAuthor = 'ผู้ใช้';
+    if (currentCalView === 'nik') defaultAuthor = 'นิก';
+    else if (currentCalView === 'som') defaultAuthor = 'พี่ส้ม';
+    else if (currentPerson && PEOPLE[currentPerson]) defaultAuthor = PEOPLE[currentPerson].name;
+
+    const noteData = {
+        id: noteId,
+        date: dateStr,
+        text: text,
+        category: category,
+        author: author || defaultAuthor,
+        time: timeStr,
+        updatedAt: now.toISOString()
+    };
+
+    if (!editingCalNoteId) {
+        noteData.createdAt = now.toISOString();
+    } else if (calendarNotesCache[noteId] && calendarNotesCache[noteId].createdAt) {
+        noteData.createdAt = calendarNotesCache[noteId].createdAt;
+    }
+
+    // Update in Cache & LocalStorage
+    calendarNotesCache[noteId] = noteData;
+    try {
+        localStorage.setItem('isuzu_calendar_notes', JSON.stringify(calendarNotesCache));
+    } catch (e) {}
+
+    // Update in Firebase if online
+    if (typeof database !== 'undefined') {
+        database.ref('calendarNotes/' + noteId).set(noteData).catch(function (err) {
+            console.warn('Firebase save error:', err);
+        });
+    }
+
+    resetCalendarNoteForm();
+    renderModalNotesList(dateStr);
+    renderCalendar();
+}
+
+function deleteCalendarNote(noteId) {
+    if (!confirm('ยืนยันว่าต้องการลบ Note นี้?')) return;
+
+    const dateStr = document.getElementById('cal-note-selected-date').value;
+
+    delete calendarNotesCache[noteId];
+    try {
+        localStorage.setItem('isuzu_calendar_notes', JSON.stringify(calendarNotesCache));
+    } catch (e) {}
+
+    if (typeof database !== 'undefined') {
+        database.ref('calendarNotes/' + noteId).remove().catch(function (err) {
+            console.warn('Firebase delete error:', err);
+        });
+    }
+
+    if (editingCalNoteId === noteId) {
+        resetCalendarNoteForm();
+    }
+
+    renderModalNotesList(dateStr);
+    renderCalendar();
+}
+
+/* ==========================================================================
+   Security PIN Lock System
+   - Web Entrance: PIN 0000 (Required every time the web app is entered/reloaded)
+   - Nik Personal Calendar: PIN 1111 (Required each time entering Nik's personal calendar)
+   - Som Personal Calendar: PIN 2222 (Required each time entering Som's personal calendar)
+   ========================================================================== */
+
+const WEB_ACCESS_PIN = '0000';
+const NIK_CAL_PIN = '1111';
+const SOM_CAL_PIN = '2222';
+
+let isWebUnlocked = false;
+let calUnlocked = {
+    nik: false,
+    som: false
+};
+let pendingCalViewMode = null;
+
+// Clear any old stored sessions so every entry requires PIN
+try {
+    sessionStorage.removeItem('isuzu_web_unlocked');
+    sessionStorage.removeItem('isuzu_cal_unlocked_nik');
+    sessionStorage.removeItem('isuzu_cal_unlocked_som');
+} catch (e) {}
+
+function requestCalendarViewMode(mode) {
+    if (mode === 'nik') {
+        if (calUnlocked.nik) {
+            setCalendarViewMode('nik');
+        } else {
+            openCalLockModal('nik');
+        }
+    } else if (mode === 'som') {
+        if (calUnlocked.som) {
+            setCalendarViewMode('som');
+        } else {
+            openCalLockModal('som');
+        }
+    } else {
+        // Returning to General view locks personal calendars again for privacy
+        calUnlocked.nik = false;
+        calUnlocked.som = false;
+        setCalendarViewMode('general');
+    }
+}
+
+function lockWebApp() {
+    isWebUnlocked = false;
+    calUnlocked.nik = false;
+    calUnlocked.som = false;
+    const lockScreen = document.getElementById('web-lock-screen');
+    const pinInput = document.getElementById('web-lock-pin-input');
+    const errorEl = document.getElementById('web-lock-error');
+
+    if (errorEl) errorEl.classList.add('hidden');
+    if (pinInput) pinInput.value = '';
+    if (lockScreen) lockScreen.classList.remove('unlocked');
+    setTimeout(function () {
+        if (pinInput) pinInput.focus();
+    }, 200);
+}
+
+function initWebLock() {
+    const lockScreen = document.getElementById('web-lock-screen');
+    const pinInput = document.getElementById('web-lock-pin-input');
+    const errorEl = document.getElementById('web-lock-error');
+    const clearBtn = document.getElementById('btn-web-lock-clear');
+    const submitBtn = document.getElementById('btn-web-lock-submit');
+    const enterBtn = document.getElementById('btn-web-lock-enter');
+    const lockBtn = document.getElementById('btn-lock-app');
+    const lockCard = document.querySelector('.web-lock-card');
+
+    if (!lockScreen) return;
+
+    // Always strictly lock on every entry/load
+    isWebUnlocked = false;
+    lockScreen.classList.remove('unlocked');
+    setTimeout(function () {
+        if (pinInput) pinInput.focus();
+    }, 250);
+
+    function checkWebPin() {
+        if (!pinInput) return;
+        const val = pinInput.value.trim();
+        if (val === WEB_ACCESS_PIN) {
+            isWebUnlocked = true;
+            if (errorEl) errorEl.classList.add('hidden');
+            lockScreen.classList.add('unlocked');
+        } else {
+            if (errorEl) errorEl.classList.remove('hidden');
+            if (lockCard) {
+                lockCard.classList.remove('shake-anim');
+                void lockCard.offsetWidth; // Force reflow
+                lockCard.classList.add('shake-anim');
+            }
+            pinInput.value = '';
+            pinInput.focus();
+        }
+    }
+
+    // Keypad number buttons
+    document.querySelectorAll('.web-pin-key[data-digit]').forEach(function (btn) {
+        btn.addEventListener('click', function (e) {
+            e.preventDefault();
+            if (!pinInput) return;
+            if (pinInput.value.length < 4) {
+                pinInput.value += btn.dataset.digit;
+            }
+            if (pinInput.value.length === 4) {
+                checkWebPin();
+            }
+        });
+    });
+
+    if (clearBtn) {
+        clearBtn.addEventListener('click', function (e) {
+            e.preventDefault();
+            if (!pinInput) return;
+            pinInput.value = pinInput.value.slice(0, -1);
+            if (errorEl) errorEl.classList.add('hidden');
+        });
+    }
+
+    if (submitBtn) {
+        submitBtn.addEventListener('click', function (e) {
+            e.preventDefault();
+            checkWebPin();
+        });
+    }
+
+    if (enterBtn) {
+        enterBtn.addEventListener('click', function (e) {
+            e.preventDefault();
+            checkWebPin();
+        });
+    }
+
+    if (lockBtn) {
+        lockBtn.addEventListener('click', function (e) {
+            e.preventDefault();
+            lockWebApp();
+        });
+    }
+
+    if (pinInput) {
+        pinInput.addEventListener('input', function () {
+            this.value = this.value.replace(/[^0-9]/g, '');
+            if (this.value.length === 4) {
+                checkWebPin();
+            }
+        });
+        pinInput.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                checkWebPin();
+            }
+        });
+    }
+
+    // When page is hidden/closed, re-arm the lock
+    window.addEventListener('pagehide', function () {
+        lockWebApp();
+    });
+}
+
+function initCalendarLock() {
+    const modal = document.getElementById('cal-lock-modal');
+    const pinInput = document.getElementById('cal-lock-pin-input');
+    const errorEl = document.getElementById('cal-lock-error');
+    const clearBtn = document.getElementById('btn-cal-lock-clear');
+    const submitBtn = document.getElementById('btn-cal-lock-submit');
+    const confirmBtn = document.getElementById('btn-cal-lock-confirm');
+    const cancelBtn = document.getElementById('btn-cal-lock-cancel');
+    const closeBtn = document.getElementById('btn-close-cal-lock');
+    const modalContent = document.querySelector('.cal-lock-modal-content');
+
+    if (!modal) return;
+
+    function checkCalPin() {
+        if (!pinInput || !pendingCalViewMode) return;
+        const val = pinInput.value.trim();
+        const expectedPin = (pendingCalViewMode === 'nik' ? NIK_CAL_PIN : SOM_CAL_PIN);
+
+        if (val === expectedPin) {
+            calUnlocked[pendingCalViewMode] = true;
+            if (errorEl) errorEl.classList.add('hidden');
+            modal.classList.add('hidden');
+            const target = pendingCalViewMode;
+            pendingCalViewMode = null;
+            setCalendarViewMode(target);
+        } else {
+            if (errorEl) errorEl.classList.remove('hidden');
+            if (modalContent) {
+                modalContent.classList.remove('shake-anim');
+                void modalContent.offsetWidth; // Force reflow
+                modalContent.classList.add('shake-anim');
+            }
+            pinInput.value = '';
+            pinInput.focus();
+        }
+    }
+
+    // Keypad digits
+    document.querySelectorAll('.cal-pin-key[data-digit]').forEach(function (btn) {
+        btn.addEventListener('click', function (e) {
+            e.preventDefault();
+            if (!pinInput) return;
+            if (pinInput.value.length < 4) {
+                pinInput.value += btn.dataset.digit;
+            }
+            if (pinInput.value.length === 4) {
+                checkCalPin();
+            }
+        });
+    });
+
+    if (clearBtn) {
+        clearBtn.addEventListener('click', function (e) {
+            e.preventDefault();
+            if (!pinInput) return;
+            pinInput.value = pinInput.value.slice(0, -1);
+            if (errorEl) errorEl.classList.add('hidden');
+        });
+    }
+
+    if (submitBtn) {
+        submitBtn.addEventListener('click', function (e) {
+            e.preventDefault();
+            checkCalPin();
+        });
+    }
+
+    if (confirmBtn) {
+        confirmBtn.addEventListener('click', function (e) {
+            e.preventDefault();
+            checkCalPin();
+        });
+    }
+
+    function closeCalLock() {
+        modal.classList.add('hidden');
+        pendingCalViewMode = null;
+        if (pinInput) pinInput.value = '';
+        if (errorEl) errorEl.classList.add('hidden');
+    }
+
+    if (cancelBtn) cancelBtn.addEventListener('click', closeCalLock);
+    if (closeBtn) closeBtn.addEventListener('click', closeCalLock);
+
+    modal.addEventListener('click', function (e) {
+        if (e.target === modal) closeCalLock();
+    });
+
+    if (pinInput) {
+        pinInput.addEventListener('input', function () {
+            this.value = this.value.replace(/[^0-9]/g, '');
+            if (this.value.length === 4) {
+                checkCalPin();
+            }
+        });
+        pinInput.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                checkCalPin();
+            }
+        });
+    }
+}
+
+function openCalLockModal(personKey) {
+    pendingCalViewMode = personKey;
+    const modal = document.getElementById('cal-lock-modal');
+    const titleEl = document.getElementById('cal-lock-modal-title');
+    const nameEl = document.getElementById('cal-lock-person-name');
+    const instrEl = document.getElementById('cal-lock-instruction');
+    const avatarEl = document.getElementById('cal-lock-avatar');
+    const iconEl = document.getElementById('cal-lock-avatar-icon');
+    const pinInput = document.getElementById('cal-lock-pin-input');
+    const errorEl = document.getElementById('cal-lock-error');
+
+    if (!modal) return;
+
+    if (personKey === 'nik') {
+        if (titleEl) titleEl.innerHTML = '<i class="fa-solid fa-lock me-2 text-primary"></i>ยืนยันรหัสผ่านปฏิทินของนิก';
+        if (nameEl) nameEl.textContent = 'ปฏิทินส่วนตัวของนิก';
+        if (instrEl) instrEl.textContent = 'กรุณากรอกรหัสผ่าน 4 หลัก เพื่อเข้าถึงปฏิทินของนิก';
+        if (avatarEl) avatarEl.className = 'cal-lock-avatar mb-3';
+        if (iconEl) iconEl.className = 'fa-solid fa-user-check';
+    } else if (personKey === 'som') {
+        if (titleEl) titleEl.innerHTML = '<i class="fa-solid fa-lock me-2 text-warning"></i>ยืนยันรหัสผ่านปฏิทินของส้ม';
+        if (nameEl) nameEl.textContent = 'ปฏิทินส่วนตัวของส้ม';
+        if (instrEl) instrEl.textContent = 'กรุณากรอกรหัสผ่าน 4 หลัก เพื่อเข้าถึงปฏิทินของส้ม';
+        if (avatarEl) avatarEl.className = 'cal-lock-avatar som-avatar mb-3';
+        if (iconEl) iconEl.className = 'fa-solid fa-user-tag';
+    }
+
+    if (errorEl) errorEl.classList.add('hidden');
+    if (pinInput) {
+        pinInput.value = '';
+        setTimeout(function () { pinInput.focus(); }, 150);
+    }
+
+    modal.classList.remove('hidden');
+}
+
+// Initialize Security PIN System when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function () {
+        initWebLock();
+        initCalendarLock();
+    });
+} else {
+    initWebLock();
+    initCalendarLock();
+}
+
+

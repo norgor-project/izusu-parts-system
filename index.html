@@ -2,7 +2,9 @@
 <html lang="th">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <title>ระบบบันทึกสั่งอะไหล่รายบุคคล</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -10,6 +12,53 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body data-person="tey">
+
+    <!-- Web Entrance Lock Screen (Required PIN: 0000) -->
+    <div id="web-lock-screen" class="web-lock-overlay">
+        <div class="web-lock-card">
+            <div class="web-lock-icon">
+                <i class="fa-solid fa-shield-halved"></i>
+            </div>
+            <h4 class="fw-bold mb-1">ระบบบันทึกสั่งอะไหล่</h4>
+            <p class="text-white-50 small mb-3">กรุณากรอกรหัสผ่าน 4 หลัก เพื่อเข้าสู่เว็บไซต์</p>
+            
+            <div class="pin-display mb-3">
+                <input type="password" id="web-lock-pin-input" maxlength="4" pattern="[0-9]*" inputmode="numeric" class="form-control text-center web-lock-input mx-auto" placeholder="••••" autocomplete="off">
+            </div>
+
+            <!-- Numeric Keypad -->
+            <div class="pin-keypad mb-3">
+                <div class="pin-keypad-row">
+                    <button type="button" class="pin-key web-pin-key" data-digit="1">1</button>
+                    <button type="button" class="pin-key web-pin-key" data-digit="2">2</button>
+                    <button type="button" class="pin-key web-pin-key" data-digit="3">3</button>
+                </div>
+                <div class="pin-keypad-row">
+                    <button type="button" class="pin-key web-pin-key" data-digit="4">4</button>
+                    <button type="button" class="pin-key web-pin-key" data-digit="5">5</button>
+                    <button type="button" class="pin-key web-pin-key" data-digit="6">6</button>
+                </div>
+                <div class="pin-keypad-row">
+                    <button type="button" class="pin-key web-pin-key" data-digit="7">7</button>
+                    <button type="button" class="pin-key web-pin-key" data-digit="8">8</button>
+                    <button type="button" class="pin-key web-pin-key" data-digit="9">9</button>
+                </div>
+                <div class="pin-keypad-row">
+                    <button type="button" class="pin-key web-pin-key pin-key-action" id="btn-web-lock-clear"><i class="fa-solid fa-delete-left"></i></button>
+                    <button type="button" class="pin-key web-pin-key" data-digit="0">0</button>
+                    <button type="button" class="pin-key web-pin-key pin-key-action pin-key-submit" id="btn-web-lock-submit"><i class="fa-solid fa-arrow-right"></i></button>
+                </div>
+            </div>
+
+            <div id="web-lock-error" class="text-danger small fw-bold mb-3 hidden">
+                <i class="fa-solid fa-triangle-exclamation me-1"></i>รหัสผ่านไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง
+            </div>
+
+            <button type="button" class="btn btn-primary w-100 py-2 fw-bold" id="btn-web-lock-enter">
+                <i class="fa-solid fa-lock-open me-2"></i>เข้าสู่ระบบ
+            </button>
+        </div>
+    </div>
 
     <!-- Deadline Alerts Sidebar -->
     <div id="deadline-alerts" class="deadline-alerts-sidebar hidden">
@@ -28,6 +77,233 @@
         <span class="deadline-badge" id="deadline-badge">0</span>
     </button>
 
+    <!-- Note Alerts Sidebar -->
+    <div id="note-alerts" class="note-alerts-sidebar hidden">
+        <div class="note-alerts-header">
+            <h6 class="fw-bold mb-0"><i class="fa-solid fa-sticky-note me-2"></i>แจ้งเตือนโน๊ต</h6>
+            <button class="btn btn-sm btn-close-note-alerts" id="btn-close-note-alerts">
+                <i class="fa-solid fa-times"></i>
+            </button>
+        </div>
+        <div id="note-alerts-list"></div>
+    </div>
+
+    <!-- Note Alert Toggle Button -->
+    <button class="note-alert-toggle hidden" id="btn-note-toggle">
+        <i class="fa-solid fa-sticky-note"></i>
+        <span class="note-alert-badge" id="note-alert-badge">0</span>
+    </button>
+
+    <!-- Quick Add Item Modal -->
+    <div id="quick-add-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="fw-bold mb-0"><i class="fa-solid fa-plus me-2"></i>เพิ่มรายการอะไหล่ด่วน</h5>
+                <button class="btn btn-sm btn-close-modal" id="btn-close-quick-add">
+                    <i class="fa-solid fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label small fw-bold mb-1">เลขอะไหล่ (10 หลัก) *</label>
+                    <input type="text" id="quick-part-no" class="form-control" placeholder="กรอกเลขอะไหล่" maxlength="10">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold mb-1">ชื่ออะไหล่</label>
+                    <input type="text" id="quick-part-name" class="form-control" placeholder="ชื่ออะไหล่">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold mb-1">จำนวน *</label>
+                    <input type="number" id="quick-qty" class="form-control" value="1" min="1">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold mb-1">หมายเหตุอะไหล่</label>
+                    <input type="text" id="quick-item-note" class="form-control" placeholder="เช่น สี/ขนาด">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="btn-cancel-quick-add">
+                    <i class="fa-solid fa-times me-2"></i>ยกเลิก
+                </button>
+                <button type="button" class="btn btn-primary" id="btn-save-quick-add">
+                    <i class="fa-solid fa-check me-2"></i>บันทึก
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Calendar Day & Note Modal -->
+    <div id="calendar-day-modal" class="modal-overlay hidden">
+        <div class="modal-content calendar-modal-content">
+            <div class="modal-header">
+                <div>
+                    <h5 class="fw-bold mb-1" id="cal-modal-date-title">
+                        <i class="fa-solid fa-calendar-day me-2 text-primary"></i>รายละเอียดวันที่
+                    </h5>
+                    <div id="cal-modal-holiday-banner" class="small fw-bold text-danger hidden">
+                        <i class="fa-solid fa-flag me-1"></i><span id="cal-modal-holiday-name"></span>
+                    </div>
+                </div>
+                <button class="btn btn-sm btn-close-modal" id="btn-close-cal-modal">
+                    <i class="fa-solid fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <!-- Attendance Check-in Panel (Shows only in Personal Calendar mode for that person) -->
+                <div class="card p-3 mb-3 cal-attendance-card hidden" id="cal-modal-attendance-panel">
+                    <h6 class="fw-bold mb-2 text-dark d-flex align-items-center gap-2">
+                        <i class="fa-solid fa-user-clock text-success"></i>
+                        <span id="cal-modal-attendance-title">บันทึกการมาทำงาน</span>
+                    </h6>
+                    <div class="row g-2">
+                        <!-- Nik Attendance Box -->
+                        <div class="col-12" id="col-attendance-nik">
+                            <div class="attendance-person-box p-3 rounded" id="box-attendance-nik">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <div class="fw-bold text-dark">
+                                        <i class="fa-solid fa-user-check me-1 text-primary"></i>นิก
+                                    </div>
+                                    <span class="badge attendance-pill" id="badge-attendance-nik">ยังไม่ได้บันทึก</span>
+                                </div>
+                                <button type="button" class="btn btn-sm w-100 btn-attendance-toggle" data-person-work="nik" id="btn-work-nik">
+                                    <i class="fa-solid fa-check me-1"></i><span id="text-work-nik">บันทึกว่ามาทำงาน</span>
+                                </button>
+                            </div>
+                        </div>
+                        <!-- Som Attendance Box -->
+                        <div class="col-12" id="col-attendance-som">
+                            <div class="attendance-person-box p-3 rounded" id="box-attendance-som">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <div class="fw-bold text-dark">
+                                        <i class="fa-solid fa-user-tag me-1 text-warning"></i>ส้ม
+                                    </div>
+                                    <span class="badge attendance-pill" id="badge-attendance-som">ยังไม่ได้บันทึก</span>
+                                </div>
+                                <button type="button" class="btn btn-sm w-100 btn-attendance-toggle" data-person-work="som" id="btn-work-som">
+                                    <i class="fa-solid fa-check me-1"></i><span id="text-work-som">บันทึกว่ามาทำงาน</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Notes in this day -->
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <label class="form-label small fw-bold mb-0 text-dark">
+                            <i class="fa-solid fa-list-check me-1 text-primary"></i>Note ที่บันทึกไว้ในวันนี้ (<span id="cal-modal-notes-count">0</span>)
+                        </label>
+                    </div>
+                    <div id="cal-modal-notes-list" class="calendar-modal-notes-list">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+
+                <!-- Form to add or edit note -->
+                <div class="card p-3 calendar-form-card" style="background:var(--bg-gray); border:1px solid var(--border-color); border-radius:12px;">
+                    <h6 class="fw-bold mb-2 small text-primary d-flex align-items-center gap-1">
+                        <i class="fa-solid fa-pen-to-square"></i>
+                        <span id="cal-form-title">เพิ่ม Note ประจำวันนี้</span>
+                    </h6>
+                    <input type="hidden" id="cal-note-edit-id" value="">
+                    <input type="hidden" id="cal-note-selected-date" value="">
+                    
+                    <div class="mb-2">
+                        <textarea id="cal-note-input-text" class="form-control form-control-sm" rows="3" placeholder="พิมพ์ข้อความ Note เช่น ลูกค้านัดรับของ, สั่งอะไหล่พิเศษ, ลางาน, เตือนความจำ..."></textarea>
+                    </div>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-sm-6">
+                            <label class="form-label small fw-semibold text-muted mb-1">หมวดหมู่</label>
+                            <select id="cal-note-category" class="form-select form-select-sm">
+                                <option value="general">📌 ทั่วไป</option>
+                                <option value="order">📦 สั่งของ / อะไหล่</option>
+                                <option value="urgent">⚡ ด่วนมาก</option>
+                                <option value="appointment">🤝 นัดหมายลูกค้า</option>
+                                <option value="leave">🏖️ ลาหยุด / วันหยุด</option>
+                            </select>
+                        </div>
+                        <div class="col-sm-6">
+                            <label class="form-label small fw-semibold text-muted mb-1">ผู้บันทึก</label>
+                            <input type="text" id="cal-note-author" class="form-control form-control-sm" placeholder="เช่น พี่เต้ย / พี่หนู">
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2">
+                        <button type="button" class="btn btn-outline-secondary btn-sm hidden" id="cal-btn-cancel-edit-note">
+                            ยกเลิก
+                        </button>
+                        <button type="button" class="btn btn-primary btn-sm px-3" id="cal-btn-save-note">
+                            <i class="fa-solid fa-check me-1"></i>บันทึก Note
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Personal Calendar Lock Modal (Nik: 1111, Som: 2222) -->
+    <div id="cal-lock-modal" class="modal-overlay hidden">
+        <div class="modal-content cal-lock-modal-content">
+            <div class="modal-header">
+                <h5 class="fw-bold mb-0" id="cal-lock-modal-title">
+                    <i class="fa-solid fa-lock me-2 text-primary"></i>ยืนยันรหัสผ่านปฏิทินส่วนตัว
+                </h5>
+                <button type="button" class="btn btn-sm btn-close-modal" id="btn-close-cal-lock">
+                    <i class="fa-solid fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body text-center p-4">
+                <div class="cal-lock-avatar mb-3" id="cal-lock-avatar">
+                    <i class="fa-solid fa-user-lock" id="cal-lock-avatar-icon"></i>
+                </div>
+                <h6 class="fw-bold mb-1" id="cal-lock-person-name">ปฏิทินส่วนตัว</h6>
+                <p class="text-muted small mb-3" id="cal-lock-instruction">กรุณากรอกรหัสผ่าน 4 หลัก เพื่อเข้าถึงปฏิทิน</p>
+
+                <div class="pin-display mb-3">
+                    <input type="password" id="cal-lock-pin-input" maxlength="4" pattern="[0-9]*" inputmode="numeric" class="form-control text-center web-lock-input mx-auto" style="max-width: 200px;" placeholder="••••" autocomplete="off">
+                </div>
+
+                <!-- On-screen Keypad -->
+                <div class="pin-keypad mb-3 mx-auto" style="max-width: 240px;">
+                    <div class="pin-keypad-row">
+                        <button type="button" class="pin-key cal-pin-key" data-digit="1">1</button>
+                        <button type="button" class="pin-key cal-pin-key" data-digit="2">2</button>
+                        <button type="button" class="pin-key cal-pin-key" data-digit="3">3</button>
+                    </div>
+                    <div class="pin-keypad-row">
+                        <button type="button" class="pin-key cal-pin-key" data-digit="4">4</button>
+                        <button type="button" class="pin-key cal-pin-key" data-digit="5">5</button>
+                        <button type="button" class="pin-key cal-pin-key" data-digit="6">6</button>
+                    </div>
+                    <div class="pin-keypad-row">
+                        <button type="button" class="pin-key cal-pin-key" data-digit="7">7</button>
+                        <button type="button" class="pin-key cal-pin-key" data-digit="8">8</button>
+                        <button type="button" class="pin-key cal-pin-key" data-digit="9">9</button>
+                    </div>
+                    <div class="pin-keypad-row">
+                        <button type="button" class="pin-key cal-pin-key pin-key-action" id="btn-cal-lock-clear"><i class="fa-solid fa-delete-left"></i></button>
+                        <button type="button" class="pin-key cal-pin-key" data-digit="0">0</button>
+                        <button type="button" class="pin-key cal-pin-key pin-key-action pin-key-submit" id="btn-cal-lock-submit"><i class="fa-solid fa-arrow-right"></i></button>
+                    </div>
+                </div>
+
+                <div id="cal-lock-error" class="text-danger small fw-bold mb-3 hidden">
+                    <i class="fa-solid fa-triangle-exclamation me-1"></i>รหัสผ่านไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-secondary flex-fill" id="btn-cal-lock-cancel">
+                        ยกเลิก
+                    </button>
+                    <button type="button" class="btn btn-primary flex-fill fw-bold" id="btn-cal-lock-confirm">
+                        <i class="fa-solid fa-unlock me-1"></i>เข้าใช้งาน
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <header class="app-header d-flex justify-content-between align-items-center">
         <div class="d-flex align-items-center gap-3">
             <div class="logo-box">
@@ -42,6 +318,14 @@
                 </div>
                 <small id="header-sub" style="font-size: 0.85rem;color:var(--text-gray);">เลือกชื่อเพื่อเข้าเมนูของตัวเอง</small>
             </div>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <button class="theme-toggle-btn" id="btn-lock-app" title="ล็อคหน้าจอ (PIN 0000)">
+                <i class="fa-solid fa-lock"></i>
+            </button>
+            <button class="theme-toggle-btn" id="btn-toggle-theme" title="สลับธีมมืด/สว่าง">
+                <i class="fa-solid fa-moon" id="theme-icon"></i>
+            </button>
         </div>
     </header>
 
@@ -77,6 +361,9 @@
                     <button type="button" class="tab-btn" data-tab="chang">
                         <i class="fa-solid fa-wrench me-2"></i>ช่าง
                     </button>
+                    <button type="button" class="tab-btn" data-tab="customer">
+                        <i class="fa-solid fa-cart-shopping me-2"></i>สั่งของลูกค้า
+                    </button>
                     <button type="button" class="tab-btn" data-tab="notes">
                         <i class="fa-solid fa-sticky-note me-2"></i>โน๊ต
                     </button>
@@ -85,6 +372,13 @@
                     </button>
                     <button type="button" class="tab-btn" data-tab="deposit">
                         <i class="fa-solid fa-money-bill-wave me-2"></i>มัดจำ
+                    </button>
+                    <button type="button" class="tab-btn position-relative" data-tab="due-alerts">
+                        <i class="fa-solid fa-clock-rotate-left me-2"></i>อะไหล่ครบกำหนด
+                        <span class="badge rounded-pill bg-danger ms-1 hidden" id="badge-due-count">0</span>
+                    </button>
+                    <button type="button" class="tab-btn" data-tab="calendar">
+                        <i class="fa-solid fa-calendar-days me-2"></i>ปฏิทิน & วันหยุด
                     </button>
                 </div>
             </div>
@@ -239,6 +533,9 @@
                                     <span class="spinner"></span>
                                     <i class="fa-solid fa-floppy-disk me-2"></i> บันทึกรายการของ<span class="person-name">พี่เต้ย</span>
                                 </button>
+                                <button type="button" class="btn btn-secondary w-100 fw-bold py-3 mt-2 hidden" id="btn-cancel-edit-batch">
+                                    <i class="fa-solid fa-times me-2"></i> ยกเลิกแก้ไข
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -261,30 +558,132 @@
         </section>
 
         <section id="view-notes" class="mt-4 hidden">
-            <div class="card-custom p-4 mb-3">
-                <h5 class="fw-bold mb-4">
-                    <i class="fa-solid fa-sticky-note me-2" style="color:var(--primary);"></i>
-                    เพิ่มโน๊ตใหม่
-                </h5>
-                <div class="mb-3">
-                    <textarea id="note-input" class="form-control" rows="4" placeholder="พิมพ์โน๊ตที่นี่..." style="border-radius:10px;padding:12px 16px;"></textarea>
-                </div>
-                <div class="row g-2 mb-3">
-                    <div class="col-md-6">
-                        <label class="form-label small fw-bold mb-1">วันที่แจ้งเตือน</label>
-                        <input type="date" id="note-alert-date" class="form-control">
+            <!-- Header & Overview Banner -->
+            <div class="note-dashboard-header mb-4">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+                    <div>
+                        <div class="d-flex align-items-center gap-2 mb-1">
+                            <span class="note-header-icon">
+                                <i class="fa-solid fa-note-sticky"></i>
+                            </span>
+                            <h4 class="fw-bold mb-0 note-title">สมุดบันทึกโน๊ต & การแจ้งเตือน</h4>
+                        </div>
+                        <p class="text-muted small mb-0">บันทึกช่วยจำ รายการงานด่วน และตั้งเวลาเตือนความจำ</p>
                     </div>
-                    <div class="col-md-6">
-                        <label class="form-label small fw-bold mb-1">เวลาแจ้งเตือน</label>
-                        <input type="time" id="note-alert-time" class="form-control">
+
+                    <!-- Quick Stats Pills -->
+                    <div class="d-flex flex-wrap align-items-center gap-2">
+                        <div class="note-stat-pill" id="stat-pill-all">
+                            <span class="stat-label"><i class="fa-solid fa-list-check me-1"></i>ทั้งหมด</span>
+                            <span class="stat-count" id="notes-total-count">0</span>
+                        </div>
+                        <div class="note-stat-pill warning" id="stat-pill-pending">
+                            <span class="stat-label"><i class="fa-solid fa-bell me-1"></i>รอแจ้งเตือน</span>
+                            <span class="stat-count" id="notes-pending-count">0</span>
+                        </div>
+                        <div class="note-stat-pill success" id="stat-pill-done">
+                            <span class="stat-label"><i class="fa-solid fa-check-double me-1"></i>เตือนแล้ว</span>
+                            <span class="stat-count" id="notes-done-count">0</span>
+                        </div>
                     </div>
                 </div>
-                <button type="button" class="btn btn-primary" id="btn-add-note">
-                    <i class="fa-solid fa-plus me-2"></i> เพิ่มโน๊ต
-                </button>
+
+                <!-- Search & Filters Toolbar -->
+                <div class="note-toolbar mt-3 pt-3 border-top d-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <div class="note-search-wrapper flex-grow-1" style="max-width: 420px;">
+                        <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                        <input type="text" id="note-search-input" class="form-control form-control-sm note-search-input" placeholder="พิมพ์เพื่อค้นหาข้อความในโน๊ต...">
+                        <button type="button" class="btn btn-sm btn-clear-search hidden" id="btn-clear-note-search">
+                            <i class="fa-solid fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-sm btn-filter-note active" data-note-filter="all">ทั้งหมด</button>
+                        <button type="button" class="btn btn-sm btn-filter-note" data-note-filter="alert">มีแจ้งเตือน</button>
+                        <button type="button" class="btn btn-sm btn-filter-note" data-note-filter="general">โน๊ตทั่วไป</button>
+                    </div>
+                </div>
             </div>
-            <div id="notes-container">
-                <p id="notes-empty" class="text-center text-muted py-5 mb-0" style="font-size:1rem;">ยังไม่มีโน๊ต</p>
+
+            <!-- Luxury Note Composer Card -->
+            <div class="card-custom note-composer-card p-4 mb-4">
+                <div class="d-flex align-items-center justify-content-between mb-3">
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="composer-icon-badge">
+                            <i class="fa-solid fa-pen-nib"></i>
+                        </div>
+                        <h6 class="fw-bold mb-0">สร้างบันทึกใหม่</h6>
+                    </div>
+                    <span class="badge note-composer-badge"><i class="fa-regular fa-clock me-1"></i>บันทึกด่วน</span>
+                </div>
+
+                <!-- Textarea -->
+                <div class="mb-3">
+                    <textarea id="note-input" class="form-control note-textarea" rows="3" placeholder="พิมพ์ข้อความที่ต้องการบันทึกช่วยจำ... (เช่น ตามอะไหล่ลูกค้าคุณสมชาย, โอนมัดจำช่าง)"></textarea>
+                </div>
+
+                <!-- Quick Tags -->
+                <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+                    <small class="text-muted fw-bold me-1"><i class="fa-solid fa-tags me-1"></i>แท็กด่วน:</small>
+                    <button type="button" class="btn btn-sm note-tag-chip" data-tag="[ด่วน] ⚡">⚡ ด่วน</button>
+                    <button type="button" class="btn btn-sm note-tag-chip" data-tag="[ตามอะไหล่] 📦">📦 ตามอะไหล่</button>
+                    <button type="button" class="btn btn-sm note-tag-chip" data-tag="[ติดต่อลูกค้า] 👤">👤 ติดต่อลูกค้า</button>
+                    <button type="button" class="btn btn-sm note-tag-chip" data-tag="[มัดจำ/โอน] 💰">💰 มัดจำ/โอน</button>
+                    <button type="button" class="btn btn-sm note-tag-chip" data-tag="[รอของเข้า] ⏳">⏳ รอของเข้า</button>
+                </div>
+
+                <!-- Alert Settings Box -->
+                <div class="note-alert-settings-box p-3 mb-3">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center mb-2">
+                        <label class="form-label small fw-bold mb-0 text-muted">
+                            <i class="fa-solid fa-clock me-1 text-warning"></i> กำหนดวัน & เวลาแจ้งเตือน (ระบุหรือไม่ก็ได้)
+                        </label>
+                        <div class="d-flex gap-1">
+                            <button type="button" class="btn btn-sm note-preset-btn" data-preset="tomorrow-morning">พรุ่งนี้ 09:00</button>
+                            <button type="button" class="btn btn-sm note-preset-btn" data-preset="tomorrow-afternoon">พรุ่งนี้ 13:30</button>
+                            <button type="button" class="btn btn-sm note-preset-btn text-danger" id="btn-clear-note-alert-time" title="ล้างวันเวลาแจ้งเตือน">
+                                <i class="fa-solid fa-xmark"></i> ล้างเวลา
+                            </button>
+                        </div>
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-md-6">
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text"><i class="fa-solid fa-calendar-day"></i></span>
+                                <input type="date" id="note-alert-date" class="form-control">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text"><i class="fa-solid fa-clock"></i></span>
+                                <input type="time" id="note-alert-time" class="form-control">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Submit Button -->
+                <div class="d-flex justify-content-end">
+                    <button type="button" class="btn btn-primary note-submit-btn" id="btn-add-note">
+                        <i class="fa-solid fa-plus me-2"></i> บันทึกโน๊ต
+                    </button>
+                </div>
+            </div>
+
+            <!-- Notes List Header & Grid Container -->
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="fw-bold mb-0 text-muted">
+                    <i class="fa-solid fa-bars-staggered me-2"></i> รายการโน๊ตทั้งหมด
+                </h6>
+            </div>
+            <div id="notes-container" class="notes-grid">
+                <div id="notes-empty" class="note-empty-state">
+                    <div class="note-empty-icon">
+                        <i class="fa-solid fa-book-open"></i>
+                    </div>
+                    <h6 class="fw-bold text-muted mb-1">ยังไม่มีรายการโน๊ต</h6>
+                    <p class="text-muted small mb-0">พิมพ์ข้อความด้านบนเพื่อเริ่มบันทึกช่วยจำและตั้งการแจ้งเตือน</p>
+                </div>
             </div>
         </section>
 
@@ -296,6 +695,80 @@
                 </h5>
                 <div id="alerts-container">
                     <p id="alerts-empty" class="text-center text-muted py-5 mb-0" style="font-size:1rem;">ไม่มีรายการที่มาส่งแล้ว</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="view-due-alerts" class="mt-4 hidden">
+            <div class="card-custom p-4 mb-3">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+                    <div>
+                        <h5 class="fw-bold mb-1">
+                            <i class="fa-solid fa-clock-rotate-left me-2" style="color:var(--danger);"></i>
+                            รายการอะไหล่ที่ครบกำหนดวันแล้ว
+                        </h5>
+                        <small class="text-muted" style="font-size:0.875rem;">รายการอะไหล่ที่สั่งซื้อแล้ว ยังไม่ได้รับ และถึงหรือเกินกำหนดวันที่ควรมาส่ง</small>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        <button type="button" class="btn btn-outline-primary btn-sm px-3" id="btn-refresh-due-alerts">
+                            <i class="fa-solid fa-rotate me-1"></i>รีเฟรชข้อมูล
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Stats summary cards -->
+                <div class="row g-3 mb-4">
+                    <div class="col-md-4">
+                        <div class="due-stat-card due-stat-total">
+                            <div class="due-stat-icon"><i class="fa-solid fa-boxes-stacked"></i></div>
+                            <div>
+                                <div class="due-stat-label">ครบกำหนดทั้งหมด</div>
+                                <div class="due-stat-value" id="due-stat-total">0 รายการ</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="due-stat-card due-stat-overdue">
+                            <div class="due-stat-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
+                            <div>
+                                <div class="due-stat-label">เกินกำหนดส่งแล้ว</div>
+                                <div class="due-stat-value" id="due-stat-overdue">0 รายการ</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="due-stat-card due-stat-today">
+                            <div class="due-stat-icon"><i class="fa-solid fa-clock"></i></div>
+                            <div>
+                                <div class="due-stat-label">ครบกำหนดวันนี้</div>
+                                <div class="due-stat-value" id="due-stat-today">0 รายการ</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Filter Controls -->
+                <div class="row g-2">
+                    <div class="col-md-8">
+                        <div class="input-group">
+                            <span class="input-group-text bg-transparent" style="border-color:var(--border-color);"><i class="fa-solid fa-magnifying-glass text-muted"></i></span>
+                            <input type="text" id="due-search-box" class="form-control" placeholder="ค้นหาเลขอะไหล่, ชื่ออะไหล่, ทะเบียนรถ, หรือชื่อผู้สั่ง..." style="border-left:none;">
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <select id="due-person-filter" class="form-select">
+                            <option value="all">ทุกคน (ทั้งหมด)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Due Items List Container -->
+            <div id="due-alerts-container">
+                <div id="due-alerts-empty" class="card-custom p-5 text-center text-muted">
+                    <i class="fa-solid fa-circle-check fa-3x text-success mb-3"></i>
+                    <h6 class="fw-bold">ไม่มีรายการอะไหล่ที่ครบกำหนดวันแล้ว</h6>
+                    <p class="small mb-0">รายการทั้งหมดได้รับของแล้ว หรือยังไม่ถึงกำหนดส่ง</p>
                 </div>
             </div>
         </section>
@@ -319,17 +792,23 @@
                         เพิ่มรายการมัดจำใหม่
                     </h5>
                 <div class="row g-3">
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                         <label class="form-label fw-bold" style="color:var(--text-dark);font-size:1rem;font-weight:700;">
                             <i class="fa-solid fa-user me-2" style="color:var(--primary);"></i>ชื่อลูกค้า *
                         </label>
                         <input type="text" id="deposit-customer" class="form-control" placeholder="ชื่อลูกค้า">
                     </div>
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                         <label class="form-label fw-bold" style="color:var(--text-dark);font-size:1rem;font-weight:700;">
                             <i class="fa-solid fa-phone me-2" style="color:var(--primary);"></i>เบอร์ติดต่อ *
                         </label>
                         <input type="text" id="deposit-phone" class="form-control" placeholder="เบอร์โทรศัพท์">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold" style="color:var(--text-dark);font-size:1rem;font-weight:700;">
+                            <i class="fa-solid fa-car me-2" style="color:var(--primary);"></i>ทะเบียนรถ
+                        </label>
+                        <input type="text" id="deposit-license-plate" class="form-control" placeholder="เช่น 1กข-1234 กทม">
                     </div>
                     <div class="col-md-4">
                         <label class="form-label fw-bold" style="color:var(--text-dark);font-size:1rem;font-weight:700;">
@@ -412,12 +891,6 @@
                 <button type="button" class="btn btn-primary mt-3" id="btn-add-deposit">
                     <i class="fa-solid fa-plus me-2"></i> เพิ่มรายการมัดจำ
                 </button>
-                <button type="button" class="btn btn-secondary mt-3 ms-2" id="btn-print-deposit-form">
-                    <i class="fa-solid fa-print me-2"></i> พิมพ์ใบมัดจำ
-                </button>
-                <button type="button" class="btn btn-warning mt-3 ms-2" id="btn-test-deadline-alert">
-                    <i class="fa-solid fa-bell me-2"></i> ทดสอบแจ้งเตือน
-                </button>
                 <button type="button" class="btn btn-warning mt-3 ms-2 hidden" id="btn-cancel-edit-deposit">
                     <i class="fa-solid fa-times me-2"></i> ยกเลิกแก้ไข
                 </button>
@@ -435,6 +908,116 @@
                     </h5>
                     <div id="deposit-history-container">
                         <p id="deposit-history-empty" class="text-center text-muted py-5 mb-0" style="font-size:1rem;">ยังไม่มีประวัติการมัดจำ</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- View Calendar & Public Holidays -->
+        <section id="view-calendar" class="mt-4 hidden">
+            <!-- Personal Calendar Mode Switcher Sub-tabs -->
+            <div class="card-custom p-3 mb-3 cal-mode-switcher-card">
+                <div class="tab-navigation cal-mode-navigation">
+                    <button type="button" class="tab-btn active" data-cal-view="general">
+                        <i class="fa-solid fa-calendar-days me-2"></i>ปฏิทินกลาง (วันหยุด & บันทึกรวม)
+                    </button>
+                    <button type="button" class="tab-btn" data-cal-view="nik">
+                        <i class="fa-solid fa-user-check me-2 text-primary"></i>ปฏิทินส่วนตัวของนิก
+                    </button>
+                    <button type="button" class="tab-btn" data-cal-view="som">
+                        <i class="fa-solid fa-user-tag me-2 text-warning"></i>ปฏิทินส่วนตัวของส้ม
+                    </button>
+                </div>
+            </div>
+
+            <!-- Calendar Header Card -->
+            <div class="card-custom p-4 mb-4 calendar-header-card">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="calendar-header-icon-box" id="calendar-header-icon-box">
+                            <i class="fa-solid fa-calendar-days" id="calendar-header-icon"></i>
+                        </div>
+                        <div>
+                            <h5 class="fw-bold mb-1 d-flex align-items-center gap-2 flex-wrap">
+                                <span id="calendar-header-title">ปฏิทิน & วันหยุดนักขัตฤกษ์</span>
+                                <span class="badge rounded-pill cal-feature-badge" id="calendar-header-badge">
+                                    <i class="fa-solid fa-note-sticky me-1"></i>บันทึก Note ประจำวันได้
+                                </span>
+                            </h5>
+                            <small class="text-muted" id="calendar-header-subtitle">แสดงวันหยุดราชการไทย พร้อมระบบจดบันทึกงานประจำวัน</small>
+                        </div>
+                    </div>
+
+                    <!-- Month / Year Controls -->
+                    <div class="calendar-controls d-flex align-items-center gap-2 flex-wrap">
+                        <div class="btn-group" role="group">
+                            <button type="button" class="btn btn-outline-secondary cal-nav-btn" id="cal-prev-month" title="เดือนก่อนหน้า">
+                                <i class="fa-solid fa-chevron-left"></i>
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary fw-bold cal-nav-btn" id="cal-today-btn" title="กลับมาเดือนปัจจุบัน">
+                                วันนี้
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary cal-nav-btn" id="cal-next-month" title="เดือนถัดไป">
+                                <i class="fa-solid fa-chevron-right"></i>
+                            </button>
+                        </div>
+
+                        <div class="d-flex align-items-center gap-2">
+                            <select id="cal-select-month" class="form-select form-select-sm fw-bold cal-selector"></select>
+                            <select id="cal-select-year" class="form-select form-select-sm fw-bold cal-selector"></select>
+                        </div>
+
+                        <button type="button" class="btn btn-primary d-inline-flex align-items-center gap-2" id="cal-btn-quick-add-note">
+                            <i class="fa-solid fa-plus"></i>
+                            <span id="cal-btn-quick-add-text">เพิ่ม Note</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Summary Bar (Dynamic for General or Personal Mode) -->
+                <div class="calendar-summary-bar mt-3 pt-3 border-top d-flex flex-wrap justify-content-between align-items-center gap-3">
+                    <div class="d-flex align-items-center gap-2 flex-wrap" id="cal-summary-chips">
+                        <!-- Nik Attendance Stat Chip (Only shown in Nik Personal View) -->
+                        <span class="cal-stat-chip work-nik-chip hidden" id="chip-work-nik" title="สถิติการมาทำงานของนิก">
+                            <i class="fa-solid fa-user-check text-primary me-1"></i><strong>มาทำงาน:</strong> เดือนนี้ <strong id="cal-stat-nik-month" class="ms-1">0</strong> วัน (รวมทั้งหมด <strong id="cal-stat-nik-total" class="ms-1">0</strong> วัน)
+                        </span>
+                        <!-- Som Attendance Stat Chip (Only shown in Som Personal View) -->
+                        <span class="cal-stat-chip work-som-chip hidden" id="chip-work-som" title="สถิติการมาทำงานของส้ม">
+                            <i class="fa-solid fa-user-tag text-warning me-1"></i><strong>มาทำงาน:</strong> เดือนนี้ <strong id="cal-stat-som-month" class="ms-1">0</strong> วัน (รวมทั้งหมด <strong id="cal-stat-som-total" class="ms-1">0</strong> วัน)
+                        </span>
+                        <span class="cal-stat-chip holiday-chip">
+                            <i class="fa-solid fa-flag text-danger me-1"></i>วันหยุด: <strong id="cal-stat-holidays" class="ms-1">0</strong> วัน
+                        </span>
+                        <span class="cal-stat-chip note-chip">
+                            <i class="fa-solid fa-note-sticky text-warning me-1"></i>Note: <strong id="cal-stat-notes" class="ms-1">0</strong> รายการ
+                        </span>
+                    </div>
+                    <div class="calendar-legend d-flex align-items-center gap-3 flex-wrap small">
+                        <span class="legend-item hidden" id="legend-item-nik"><span class="legend-dot work-nik-dot"></span> นิกมาทำงาน</span>
+                        <span class="legend-item hidden" id="legend-item-som"><span class="legend-dot work-som-dot"></span> ส้มมาทำงาน</span>
+                        <span class="legend-item"><span class="legend-dot today-dot"></span> วันนี้</span>
+                        <span class="legend-item"><span class="legend-dot holiday-dot"></span> วันหยุด</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Calendar Grid Card -->
+            <div class="card-custom p-4 calendar-main-card">
+                <div class="calendar-grid-wrapper">
+                    <!-- Weekday Header -->
+                    <div class="calendar-weekdays-grid">
+                        <div class="weekday-cell weekend-sunday">อา. <span class="weekday-full">(อาทิตย์)</span></div>
+                        <div class="weekday-cell">จ. <span class="weekday-full">(จันทร์)</span></div>
+                        <div class="weekday-cell">อ. <span class="weekday-full">(อังคาร)</span></div>
+                        <div class="weekday-cell">พ. <span class="weekday-full">(พุธ)</span></div>
+                        <div class="weekday-cell">พฤ. <span class="weekday-full">(พฤหัส)</span></div>
+                        <div class="weekday-cell">ศ. <span class="weekday-full">(ศุกร์)</span></div>
+                        <div class="weekday-cell weekend-saturday">ส. <span class="weekday-full">(เสาร์)</span></div>
+                    </div>
+
+                    <!-- Days Grid -->
+                    <div class="calendar-days-grid" id="calendar-days-grid">
+                        <!-- Populated by JS -->
                     </div>
                 </div>
             </div>
@@ -539,5 +1122,35 @@
             setTimeout(initTempPinInput, 100);
         }
     </script>
+    <script>
+        // Theme Toggle
+        (function() {
+            var saved = localStorage.getItem('theme') || 'light';
+            if (saved === 'dark') {
+                document.documentElement.setAttribute('data-theme', 'dark');
+            }
+            function updateIcon() {
+                var icon = document.getElementById('theme-icon');
+                if (!icon) return;
+                var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+                icon.className = isDark ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
+            }
+            updateIcon();
+            document.addEventListener('click', function(e) {
+                var btn = e.target.closest('#btn-toggle-theme');
+                if (!btn) return;
+                var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+                if (isDark) {
+                    document.documentElement.removeAttribute('data-theme');
+                    localStorage.setItem('theme', 'light');
+                } else {
+                    document.documentElement.setAttribute('data-theme', 'dark');
+                    localStorage.setItem('theme', 'dark');
+                }
+                updateIcon();
+            });
+        })();
+    </script>
 </body>
 </html>
+
