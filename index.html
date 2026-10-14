@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#1e293b">
+    <meta name="format-detection" content="telephone=no">
     <title>ระบบบันทึกสั่งอะไหล่รายบุคคล</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -60,6 +63,9 @@
         </div>
     </div>
 
+    <!-- Growl Notification Alert Container (growl-alert-box.png) -->
+    <div id="growl-container" class="growl-container" aria-live="polite"></div>
+
     <!-- Deadline Alerts Sidebar -->
     <div id="deadline-alerts" class="deadline-alerts-sidebar hidden">
         <div class="deadline-alerts-header">
@@ -92,6 +98,23 @@
     <button class="note-alert-toggle hidden" id="btn-note-toggle">
         <i class="fa-solid fa-sticky-note"></i>
         <span class="note-alert-badge" id="note-alert-badge">0</span>
+    </button>
+
+    <!-- Mobile Service Alerts Sidebar -->
+    <div id="mobile-alerts" class="mobile-alerts-sidebar hidden">
+        <div class="mobile-alerts-header">
+            <h6 class="fw-bold mb-0"><i class="fa-solid fa-truck-fast me-2"></i>แจ้งเตือน Mobile Service</h6>
+            <button class="btn btn-sm btn-close-mobile-alerts" id="btn-close-mobile-alerts" title="ปิด">
+                <i class="fa-solid fa-times"></i>
+            </button>
+        </div>
+        <div id="mobile-alerts-list"></div>
+    </div>
+
+    <!-- Mobile Service Alert Toggle Button -->
+    <button class="mobile-alert-toggle hidden" id="btn-mobile-alert-toggle" title="แจ้งเตือน Mobile Service">
+        <i class="fa-solid fa-truck-fast"></i>
+        <span class="mobile-alert-badge" id="mobile-alert-badge">0</span>
     </button>
 
     <!-- Quick Add Item Modal -->
@@ -332,54 +355,97 @@
     <div class="container-fluid px-4 py-4">
 
         <div class="mb-4">
-            <div class="card-custom p-4">
-                <div class="tab-navigation">
-                    <button type="button" class="tab-btn" data-tab="search-all">
-                        <i class="fa-solid fa-magnifying-glass me-2"></i>ค้นหาทั้งหมด
+            <div class="card-custom p-3 p-md-4 two-tier-nav-card">
+                <!-- Tier 1: Main Category Tabs (Clean & Compact) -->
+                <div class="tab-navigation main-tier-navigation">
+                    <button type="button" class="tab-btn main-nav-btn active" data-category="orders" id="main-tab-orders">
+                        <i class="fa-solid fa-boxes-packing me-1"></i>
+                        <span>สั่งอะไหล่</span>
+                        <span class="active-person-chip" id="main-tab-person-name">พี่เต้ย</span>
+                        <span class="badge rounded-pill bg-danger ms-1 hidden" id="badge-orders-due">0</span>
                     </button>
-                    <button type="button" class="tab-btn active" data-tab="tey">
-                        <i class="fa-solid fa-user-gear me-2"></i>พี่เต้ย
+                    <button type="button" class="tab-btn main-nav-btn position-relative" data-tab="mobile-service" id="tab-btn-mobile-service">
+                        <i class="fa-solid fa-truck-fast me-1"></i>
+                        <span>Mobile Service</span>
+                        <span class="badge rounded-pill bg-danger ms-1 mobile-notification-badge hidden" id="badge-mobile-pending">0</span>
                     </button>
-                    <button type="button" class="tab-btn" data-tab="som">
-                        <i class="fa-solid fa-user-tag me-2"></i>พี่ส้ม
-                    </button>
-                    <button type="button" class="tab-btn" data-tab="nu">
-                        <i class="fa-solid fa-user-check me-2"></i>พี่หนู
-                    </button>
-                    <button type="button" class="tab-btn" data-tab="o">
-                        <i class="fa-solid fa-user-tie me-2"></i>พี่อิ๋ว
-                    </button>
-                    <button type="button" class="tab-btn" data-tab="flash">
-                        <i class="fa-solid fa-bolt me-2"></i>พี่แฟลช
-                    </button>
-                    <button type="button" class="tab-btn" data-tab="oi">
-                        <i class="fa-solid fa-user me-2"></i>พี่โอ
-                    </button>
-                    <button type="button" class="tab-btn" data-tab="bek">
-                        <i class="fa-solid fa-user-astronaut me-2"></i>พี่เบ็ก
-                    </button>
-                    <button type="button" class="tab-btn" data-tab="chang">
-                        <i class="fa-solid fa-wrench me-2"></i>ช่าง
-                    </button>
-                    <button type="button" class="tab-btn" data-tab="customer">
-                        <i class="fa-solid fa-cart-shopping me-2"></i>สั่งของลูกค้า
-                    </button>
-                    <button type="button" class="tab-btn" data-tab="notes">
-                        <i class="fa-solid fa-sticky-note me-2"></i>โน๊ต
-                    </button>
-                    <button type="button" class="tab-btn" data-tab="alerts">
-                        <i class="fa-solid fa-bell me-2"></i>แจ้งเตือน
-                    </button>
-                    <button type="button" class="tab-btn" data-tab="deposit">
-                        <i class="fa-solid fa-money-bill-wave me-2"></i>มัดจำ
-                    </button>
-                    <button type="button" class="tab-btn position-relative" data-tab="due-alerts">
-                        <i class="fa-solid fa-clock-rotate-left me-2"></i>อะไหล่ครบกำหนด
+                    <button type="button" class="tab-btn main-nav-btn position-relative" data-tab="due-alerts" id="tab-btn-due-alerts">
+                        <i class="fa-solid fa-clock-rotate-left me-1"></i>
+                        <span>อะไหล่ครบกำหนด</span>
                         <span class="badge rounded-pill bg-danger ms-1 hidden" id="badge-due-count">0</span>
                     </button>
-                    <button type="button" class="tab-btn" data-tab="calendar">
-                        <i class="fa-solid fa-calendar-days me-2"></i>ปฏิทิน & วันหยุด
+                    <button type="button" class="tab-btn main-nav-btn" data-tab="deposit">
+                        <i class="fa-solid fa-money-bill-wave me-1"></i>
+                        <span>มัดจำ</span>
                     </button>
+                    <button type="button" class="tab-btn main-nav-btn" data-tab="calendar">
+                        <i class="fa-solid fa-calendar-days me-1"></i>
+                        <span>ปฏิทิน & วันหยุด</span>
+                    </button>
+                    <button type="button" class="tab-btn main-nav-btn" data-tab="notes">
+                        <i class="fa-solid fa-sticky-note me-1"></i>
+                        <span>โน๊ต</span>
+                    </button>
+                    <button type="button" class="tab-btn main-nav-btn position-relative" data-tab="borrow" id="tab-btn-borrow">
+                        <i class="fa-solid fa-people-arrows me-1"></i>
+                        <span>คนยืมอะไหล่</span>
+                        <span class="badge rounded-pill bg-warning text-dark ms-1 borrow-notification-badge hidden" id="badge-borrow-pending">0</span>
+                    </button>
+                    <button type="button" class="tab-btn main-nav-btn" data-tab="alerts">
+                        <i class="fa-solid fa-bell me-1"></i>
+                        <span>แจ้งเตือน</span>
+                    </button>
+                    <button type="button" class="tab-btn main-nav-btn" data-tab="search-all">
+                        <i class="fa-solid fa-magnifying-glass me-1"></i>
+                        <span>ค้นหาทั้งหมด</span>
+                    </button>
+                </div>
+
+                <!-- Tier 2: People Sub-Navigation (Shown when "สั่งอะไหล่" is selected) -->
+                <div class="sub-tier-navigation" id="tier2-people-subnav">
+                    <div class="sub-tier-header d-flex align-items-center justify-content-between">
+                        <span class="sub-tier-title">
+                            <i class="fa-solid fa-users me-2 text-primary"></i>เลือกผู้สั่งอะไหล่:
+                        </span>
+                    </div>
+                    <div class="sub-tier-pills">
+                        <button type="button" class="sub-pill-btn tab-btn active" data-tab="tey">
+                            <i class="fa-solid fa-user-gear me-1"></i>พี่เต้ย
+                            <span class="badge rounded-pill bg-danger ms-1 person-due-badge hidden" id="badge-due-tey">0</span>
+                        </button>
+                        <button type="button" class="sub-pill-btn tab-btn" data-tab="som">
+                            <i class="fa-solid fa-user-tag me-1"></i>พี่ส้ม
+                            <span class="badge rounded-pill bg-danger ms-1 person-due-badge hidden" id="badge-due-som">0</span>
+                        </button>
+                        <button type="button" class="sub-pill-btn tab-btn" data-tab="nu">
+                            <i class="fa-solid fa-user-check me-1"></i>พี่หนู
+                            <span class="badge rounded-pill bg-danger ms-1 person-due-badge hidden" id="badge-due-nu">0</span>
+                        </button>
+                        <button type="button" class="sub-pill-btn tab-btn" data-tab="o">
+                            <i class="fa-solid fa-user-tie me-1"></i>พี่อิ๋ว
+                            <span class="badge rounded-pill bg-danger ms-1 person-due-badge hidden" id="badge-due-o">0</span>
+                        </button>
+                        <button type="button" class="sub-pill-btn tab-btn" data-tab="flash">
+                            <i class="fa-solid fa-bolt me-1"></i>พี่แฟลช
+                            <span class="badge rounded-pill bg-danger ms-1 person-due-badge hidden" id="badge-due-flash">0</span>
+                        </button>
+                        <button type="button" class="sub-pill-btn tab-btn" data-tab="oi">
+                            <i class="fa-solid fa-user me-1"></i>พี่โอ
+                            <span class="badge rounded-pill bg-danger ms-1 person-due-badge hidden" id="badge-due-oi">0</span>
+                        </button>
+                        <button type="button" class="sub-pill-btn tab-btn" data-tab="bek">
+                            <i class="fa-solid fa-user-astronaut me-1"></i>พี่เบ็ก
+                            <span class="badge rounded-pill bg-danger ms-1 person-due-badge hidden" id="badge-due-bek">0</span>
+                        </button>
+                        <button type="button" class="sub-pill-btn tab-btn" data-tab="chang">
+                            <i class="fa-solid fa-wrench me-1"></i>ช่าง
+                            <span class="badge rounded-pill bg-danger ms-1 person-due-badge hidden" id="badge-due-chang">0</span>
+                        </button>
+                        <button type="button" class="sub-pill-btn tab-btn" data-tab="customer">
+                            <i class="fa-solid fa-cart-shopping me-1"></i>สั่งของลูกค้า
+                            <span class="badge rounded-pill bg-danger ms-1 person-due-badge hidden" id="badge-due-customer">0</span>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -457,35 +523,74 @@
                             </h5>
                             
                             <!-- Form to add item -->
-                            <div class="card-custom p-3 mb-3" style="background:var(--bg-gray);">
-                                <h6 class="fw-bold mb-3" style="font-size:0.9rem;">เพิ่มรายการอะไหล่</h6>
-                                <div class="row g-2">
-                                    <div class="col-md-3">
-                                        <label class="form-label small fw-bold mb-1">เลขอะไหล่ (10 หลัก) *</label>
-                                        <input type="text" id="temp-part-no" class="form-control form-control-sm" placeholder="กรอกเลขอะไหล่" required maxlength="10" style="display:none;">
-                                        <div class="pin-boxes-small" id="temp-pin-boxes"></div>
-                                        <div class="pin-hidden-input-container-small">
-                                            <input type="text" id="temp-part-no-hidden" class="form-control form-control-sm" placeholder="กรอกเลขอะไหล่" required maxlength="10" autocomplete="off">
-                                        </div>
-                                        <button type="button" class="btn btn-sm btn-outline-secondary mt-1" id="btn-clear-temp-pin" style="font-size:0.75rem;padding:4px 8px;">
-                                            <i class="fa-solid fa-eraser me-1"></i> ล้าง
+                            <div class="card-custom p-3 p-md-4 mb-3 add-item-form-card" style="background:var(--bg-gray);">
+                                <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="add-item-header-icon">
+                                            <i class="fa-solid fa-cube"></i>
+                                        </span>
+                                        <h6 class="fw-bold mb-0 text-dark" style="font-size:1.05rem;">เพิ่มรายการอะไหล่</h6>
+                                        <span class="badge bg-light text-muted border d-none d-sm-inline-block" style="font-size:0.75rem;">พิมพ์เลข 10 หลักแล้วระบบจะเลื่อนไปชื่ออะไหล่อัตโนมัติ</span>
+                                    </div>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span id="pin-status-badge" class="badge pin-status-pill">
+                                            <i class="fa-solid fa-keyboard me-1"></i> 0 / 10 หลัก
+                                        </span>
+                                        <button type="button" class="btn btn-sm btn-outline-danger btn-clear-pin-pill" id="btn-clear-temp-pin">
+                                            <i class="fa-solid fa-eraser me-1"></i> ล้างเลข
                                         </button>
                                     </div>
-                                    <div class="col-md-3">
-                                        <label class="form-label small fw-bold mb-1">ชื่ออะไหล่</label>
-                                        <input type="text" id="temp-part-name" class="form-control form-control-sm" placeholder="ชื่ออะไหล่">
+                                </div>
+                                
+                                <!-- Hero Row: Large PIN Boxes -->
+                                <div class="pin-entry-card mb-3">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <label class="form-label fw-bold mb-0" style="font-size:0.92rem;color:var(--text-dark);">
+                                            <i class="fa-solid fa-barcode text-primary me-2"></i>เลขอะไหล่ (10 หลัก) <span class="text-danger">*</span>
+                                        </label>
+                                        <span class="text-muted small" style="font-size:0.78rem;">(พิมพ์หรือคัดลอกมาวางได้ทันที)</span>
                                     </div>
-                                    <div class="col-md-2">
-                                        <label class="form-label small fw-bold mb-1">จำนวน *</label>
-                                        <input type="number" id="temp-qty" class="form-control form-control-sm" value="1" min="1" required>
+                                    <div class="pin-boxes-scroll-wrapper">
+                                        <div class="pin-boxes-small" id="temp-pin-boxes"></div>
                                     </div>
-                                    <div class="col-md-2">
-                                        <label class="form-label small fw-bold mb-1">หมายเหตุอะไหล่</label>
-                                        <input type="text" id="temp-item-note" class="form-control form-control-sm" placeholder="เช่น สี/ขนาด">
+                                    <div class="pin-hidden-input-container-small">
+                                        <input type="text" id="temp-part-no-hidden" class="form-control form-control-sm" placeholder="กรอกเลขอะไหล่" required maxlength="10" autocomplete="off">
                                     </div>
-                                    <div class="col-md-2 d-flex align-items-end">
-                                        <button type="button" class="btn btn-primary w-100" id="btn-add-item">
-                                            <i class="fa-solid fa-plus"></i>
+                                    <input type="text" id="temp-part-no" class="form-control form-control-sm" placeholder="กรอกเลขอะไหล่" required maxlength="10" style="display:none;">
+                                </div>
+
+                                <!-- Details Row: Name, Stepper Qty, Note, and Prominent Add Button -->
+                                <div class="row g-2 align-items-end add-item-fields-row">
+                                    <div class="col-lg-4 col-md-5 col-12">
+                                        <label class="form-label small fw-bold mb-1" style="color:var(--text-dark);">
+                                            <i class="fa-solid fa-tag text-primary me-1"></i>ชื่ออะไหล่
+                                        </label>
+                                        <input type="text" id="temp-part-name" class="form-control form-control-item" placeholder="เช่น ผ้าเบรคหน้า, กรองน้ำมันเครื่อง">
+                                    </div>
+                                    <div class="col-lg-2 col-md-3 col-6">
+                                        <label class="form-label small fw-bold mb-1" style="color:var(--text-dark);">
+                                            <i class="fa-solid fa-cubes-stacked text-primary me-1"></i>จำนวน <span class="text-danger">*</span>
+                                        </label>
+                                        <div class="qty-stepper-box">
+                                            <button type="button" class="btn btn-qty-step" id="btn-temp-qty-minus" title="ลดจำนวน">
+                                                <i class="fa-solid fa-minus"></i>
+                                            </button>
+                                            <input type="number" id="temp-qty" class="form-control form-control-item text-center fw-bold qty-stepper-input" value="1" min="1" required>
+                                            <button type="button" class="btn btn-qty-step" id="btn-temp-qty-plus" title="เพิ่มจำนวน">
+                                                <i class="fa-solid fa-plus"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="col-lg-3 col-md-4 col-6">
+                                        <label class="form-label small fw-bold mb-1" style="color:var(--text-dark);">
+                                            <i class="fa-solid fa-pen-to-square text-primary me-1"></i>หมายเหตุอะไหล่
+                                        </label>
+                                        <input type="text" id="temp-item-note" class="form-control form-control-item" placeholder="เช่น สี/ขนาด/แท้ศูนย์">
+                                    </div>
+                                    <div class="col-lg-3 col-md-12 col-12">
+                                        <button type="button" class="btn btn-primary w-100 btn-add-item-custom" id="btn-add-item">
+                                            <i class="fa-solid fa-circle-plus fa-lg me-1"></i>
+                                            <span>เพิ่มลงรายการ</span>
                                         </button>
                                     </div>
                                 </div>
@@ -526,8 +631,21 @@
                                     <input type="text" id="license-plate" class="form-control" placeholder="เช่น กข-1234">
                                 </div>
                                 <div class="mb-4">
-                                    <label class="form-label fw-bold" style="color:var(--text-gray);font-size:0.9rem;">หมายเหตุ</label>
-                                    <input type="text" id="note" class="form-control" placeholder="เช่น รายละเอียดเพิ่มเติม">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <label class="form-label fw-bold mb-0" style="color:var(--text-gray);font-size:0.9rem;">
+                                            <i class="fa-solid fa-note-sticky text-warning me-1"></i>หมายเหตุ
+                                        </label>
+                                        <span class="small text-muted" style="font-size:0.8rem;"><i class="fa-solid fa-bolt text-warning me-1"></i>เลือกเร็ว:</span>
+                                    </div>
+                                    <input type="text" id="note" class="form-control" placeholder="เช่น ของมาแจ้งที่เต้ย / โทรแจ้งลูกค้า / รายละเอียดเพิ่มเติม">
+                                    <div class="quick-note-chips mt-2 d-flex flex-wrap gap-2">
+                                        <button type="button" class="btn btn-note-chip btn-note-chip-person" id="chip-note-person" data-target="note" title="คลิกเพื่อเลือกหมายเหตุนี้">
+                                            <i class="fa-solid fa-bell me-1 text-primary"></i><span class="chip-person-text">ของมาแจ้งที่เต้ย</span>
+                                        </button>
+                                        <button type="button" class="btn btn-note-chip btn-note-chip-customer" data-target="note" data-val="ของมาโทรแจ้งลูกค้า" title="คลิกเพื่อเลือกหมายเหตุนี้">
+                                            <i class="fa-solid fa-phone-volume me-1 text-success"></i><span class="chip-customer-text">ของมาโทรแจ้งลูกค้า</span>
+                                        </button>
+                                    </div>
                                 </div>
                                 <button type="button" class="btn btn-primary w-100 fw-bold py-3" id="btn-save">
                                     <span class="spinner"></span>
@@ -1022,18 +1140,428 @@
                 </div>
             </div>
         </section>
+
+        <!-- Mobile Service Section -->
+        <section id="view-mobile-service" class="mt-3 hidden">
+            <!-- Header Card -->
+            <div class="ms-header-card p-3 p-md-4 mb-3">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="ms-header-icon-box">
+                            <i class="fa-solid fa-car"></i>
+                        </div>
+                        <div>
+                            <h3 class="fw-bold mb-0 text-dark ms-header-title">Mobile Service</h3>
+                            <p class="text-muted small mb-0 mt-1">
+                                บันทึกงาน Mobile Service จัดของ และแจ้งเตือนวันที่ช่างจะมาเอาของ
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Header Status Pills -->
+                    <div class="ms-header-pills">
+                        <button type="button" class="ms-stat-pill ms-stat-pill-all active" data-pill-filter="all" title="ดูรายการทั้งหมด">
+                            <i class="fa-solid fa-list-ul me-1 text-muted"></i>
+                            <span>ทั้งหมด</span>
+                            <span class="ms-pill-counter" id="ms-stat-total">0</span>
+                        </button>
+                        <button type="button" class="ms-stat-pill ms-stat-pill-pending" data-pill-filter="pending" title="ดูรายการรอจัดของ">
+                            <i class="fa-solid fa-clock me-1 text-warning"></i>
+                            <span>รอจัดของ</span>
+                            <span class="ms-pill-counter warning" id="ms-stat-pending">0</span>
+                        </button>
+                        <button type="button" class="ms-stat-pill ms-stat-pill-ready" data-pill-filter="ready" title="ดูรายการจัดของแล้ว">
+                            <i class="fa-solid fa-check-double me-1 text-success"></i>
+                            <span>จัดของแล้ว</span>
+                            <span class="ms-pill-counter success" id="ms-stat-ready">0</span>
+                        </button>
+                        <button type="button" class="ms-stat-pill ms-stat-pill-due" data-pill-filter="due" title="ดูรายการวันนี้/เลยกำหนด">
+                            <i class="fa-solid fa-bell me-1 text-danger"></i>
+                            <span>วันนี้/เลยกำหนด</span>
+                            <span class="ms-pill-counter danger" id="ms-stat-due">0</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Mobile Service Form Card -->
+            <div class="ms-form-container card-custom mb-4" id="ms-form-card">
+                <div class="ms-form-top-accent"></div>
+                <div class="p-3 p-md-4">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="ms-form-icon-squircle">
+                                <i class="fa-solid fa-car"></i>
+                            </div>
+                            <h5 class="fw-bold mb-0 text-dark" id="ms-form-title">บันทึกงาน Mobile Service ใหม่</h5>
+                        </div>
+                        <button type="button" class="btn btn-sm ms-btn-new-job" id="btn-ms-new-job">
+                            <i class="fa-solid fa-car me-1"></i>เพิ่มงาน
+                        </button>
+                    </div>
+
+                    <input type="hidden" id="ms-edit-id" value="">
+                    <input type="hidden" id="ms-technician" value="">
+
+                    <!-- Field: เลขทะเบียนรถ -->
+                    <div class="mb-3">
+                        <label class="form-label ms-form-label" for="ms-license-plate">
+                            <i class="fa-solid fa-car text-primary me-2"></i>เลขทะเบียนรถ <span class="text-danger">*</span>
+                        </label>
+                        <input type="text" id="ms-license-plate" class="form-control ms-form-input" placeholder="เช่น 777, 1กข-1234, กข-5678" autocomplete="off">
+                    </div>
+
+                    <!-- Field: หมายเหตุ / รายละเอียด -->
+                    <div class="mb-3">
+                        <label class="form-label ms-form-label" for="ms-note">
+                            <i class="fa-solid fa-pen text-secondary me-2"></i>หมายเหตุ / รายละเอียด
+                        </label>
+                        <textarea id="ms-note" class="form-control ms-form-textarea" rows="3" placeholder="เช่น เช็คระยะ, เปลี่ยนผ้าเบรก, อะไหล่ที่ต้องจัด..."></textarea>
+                    </div>
+
+                    <!-- Field: สถานะจัดของ -->
+                    <div class="mb-3">
+                        <label class="form-label ms-form-label">
+                            <i class="fa-solid fa-square-check text-success me-2"></i>สถานะจัดของ
+                        </label>
+                        <div class="ms-toggle-btn-group">
+                            <button type="button" class="ms-status-btn active-pending" id="ms-btn-status-pending" data-status="pending">
+                                <i class="fa-solid fa-triangle-exclamation me-1"></i>ยังไม่ได้จัดของ
+                            </button>
+                            <button type="button" class="ms-status-btn outline-ready" id="ms-btn-status-ready" data-status="ready">
+                                <i class="fa-solid fa-check-double me-1"></i>จัดของไว้แล้ว
+                            </button>
+                        </div>
+                        <input type="hidden" name="ms_status" id="ms-status-val" value="pending">
+                    </div>
+
+                    <!-- Field: วันที่ช่างจะมาเอาของ (แจ้งเตือน) -->
+                    <div class="mb-4">
+                        <div class="d-flex justify-content-between align-items-center mb-1 flex-wrap gap-2">
+                            <label class="form-label ms-form-label mb-0" for="ms-service-date">
+                                <i class="fa-solid fa-bell text-warning me-2"></i>วันที่ช่างจะมาเอาของ (แจ้งเตือน)
+                            </label>
+                            <div class="d-flex align-items-center gap-1">
+                                <button type="button" class="btn btn-sm ms-quick-date-btn" id="ms-quick-today">วันนี้</button>
+                                <button type="button" class="btn btn-sm ms-quick-date-btn" id="ms-quick-tomorrow">พรุ่งนี้</button>
+                                <button type="button" class="btn btn-sm ms-quick-date-btn text-danger" id="ms-quick-clear">
+                                    <i class="fa-solid fa-xmark me-1"></i>ล้าง
+                                </button>
+                            </div>
+                        </div>
+                        <div>
+                            <input type="date" id="ms-service-date" class="form-control ms-form-input">
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="d-flex justify-content-end align-items-center gap-2">
+                        <button type="button" class="btn btn-outline-secondary btn-sm hidden" id="ms-btn-cancel-edit">
+                            <i class="fa-solid fa-xmark me-1"></i>ยกเลิกการแก้ไข
+                        </button>
+                        <button type="button" class="btn btn-primary ms-btn-submit fw-bold" id="btn-ms-save">
+                            <i class="fa-solid fa-floppy-disk me-2"></i>บันทึกงาน Mobile Service
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Search, Filter & Controls Bar -->
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+                <div class="ms-search-wrapper">
+                    <i class="fa-solid fa-magnifying-glass ms-search-icon"></i>
+                    <input type="text" id="ms-search-input" class="ms-search-input-pill" placeholder="ค้นหาเลขทะเบียน, หมายเหตุ...">
+                </div>
+                <div class="ms-filter-pills d-flex align-items-center gap-2 flex-wrap" id="ms-filter-status-group">
+                    <button type="button" class="ms-filter-btn active" data-status-filter="all">ทั้งหมด</button>
+                    <button type="button" class="ms-filter-btn" data-status-filter="pending">รอจัดของ</button>
+                    <button type="button" class="ms-filter-btn" data-status-filter="ready">จัดของแล้ว</button>
+                    <button type="button" class="ms-filter-btn" data-status-filter="due">วันนี้/เลยกำหนด</button>
+                </div>
+            </div>
+
+            <!-- List Header Card -->
+            <div class="ms-list-header-card card-custom p-3 mb-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="ms-list-header-icon">
+                        <i class="fa-solid fa-layer-group"></i>
+                    </div>
+                    <div>
+                        <h6 class="fw-bold mb-0 text-dark">รายการงาน Mobile Service ทั้งหมด</h6>
+                        <small class="text-muted">ติดตามสถานะจัดของ และกำหนดวันมารับของช่าง</small>
+                    </div>
+                </div>
+                <div>
+                    <span class="badge ms-count-badge" id="ms-list-count">
+                        <i class="fa-solid fa-chart-simple me-1"></i>0 รายการ
+                    </span>
+                </div>
+            </div>
+
+            <!-- Mobile Service Records List -->
+            <div id="ms-records-container">
+                <!-- Dynamically rendered list of records -->
+            </div>
+
+            <div id="ms-records-empty" class="card-custom p-5 text-center text-muted hidden">
+                <div class="mb-3 text-secondary opacity-50">
+                    <i class="fa-solid fa-truck-ramp-box fa-3x"></i>
+                </div>
+                <h5 class="fw-bold mb-1">ยังไม่มีรายการ Mobile Service ที่ตรงกับเงื่อนไข</h5>
+                <p class="small mb-0">กรอกเลขทะเบียนรถและเลือกสถานะการจัดของด้านบนเพื่อเริ่มบันทึกรายการ</p>
+            </div>
+        </section>
+
+        <!-- ===================================================
+             Section: คนยืมอะไหล่ (Borrow Parts / ยืม-คืน)
+             =================================================== -->
+        <section id="view-borrow" class="mt-4 hidden">
+            <!-- Header Card with Stats -->
+            <div class="borrow-header-card card-custom p-4 mb-4">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="borrow-header-icon-box">
+                            <i class="fa-solid fa-people-arrows"></i>
+                        </div>
+                        <div>
+                            <h4 class="fw-bold mb-1 borrow-header-title">สมุดบันทึกคนยืมอะไหล่ (ยืม-คืน)</h4>
+                            <p class="text-muted small mb-0">จดบันทึกใครยืมอะไหล่อะไร เอาไปตอนไหน และติดตามการนำมาคืน</p>
+                        </div>
+                    </div>
+                    <!-- Quick Stat Pills -->
+                    <div class="d-flex flex-wrap align-items-center gap-2">
+                        <div class="borrow-stat-pill borrow-stat-pending active" data-borrow-filter="pending" id="borrow-pill-pending" title="คลิกเพื่อดูกำลังยืม">
+                            <span class="pulse-dot warning me-1"></span>
+                            <span>กำลังยืม (ยังไม่คืน)</span>
+                            <span class="borrow-pill-counter" id="borrow-stat-pending">0</span>
+                        </div>
+                        <div class="borrow-stat-pill borrow-stat-returned" data-borrow-filter="returned" id="borrow-pill-returned" title="คลิกเพื่อดูคืนแล้ว">
+                            <i class="fa-solid fa-circle-check text-success me-1"></i>
+                            <span>คืนแล้ว</span>
+                            <span class="borrow-pill-counter" id="borrow-stat-returned">0</span>
+                        </div>
+                        <div class="borrow-stat-pill" data-borrow-filter="all" id="borrow-pill-all" title="คลิกเพื่อดูทั้งหมด">
+                            <i class="fa-solid fa-list-check me-1"></i>
+                            <span>ทั้งหมด</span>
+                            <span class="borrow-pill-counter" id="borrow-stat-total">0</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Form Card: บันทึกการยืมอะไหล่ (รองรับหลายรายการในครั้งเดียว & เลขอะไหล่ 10 หลักเป๊ะ) -->
+            <div class="card-custom p-3 p-md-4 mb-4 borrow-form-card">
+                <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                    <h5 class="fw-bold mb-0 text-dark d-flex align-items-center gap-2" id="borrow-form-title">
+                        <span class="borrow-icon-circle"><i class="fa-solid fa-plus"></i></span>
+                        <span>ลงบันทึกการยืมอะไหล่</span>
+                    </h5>
+                    <div class="d-flex align-items-center gap-2">
+                        <button type="button" class="btn btn-outline-secondary btn-sm rounded-pill px-3" id="btn-borrow-clear-form">
+                            <i class="fa-solid fa-rotate-left me-1"></i>ล้างฟอร์ม
+                        </button>
+                    </div>
+                </div>
+
+                <input type="hidden" id="borrow-edit-id">
+
+                <!-- 1. ข้อมูลผู้ยืม & วันเวลา -->
+                <div class="borrow-section-box mb-3 p-3 rounded" style="background:var(--bg-gray); border:1px solid var(--border-color); border-radius:12px;">
+                    <div class="row g-3">
+                        <!-- Borrower Name with Quick Staff Chips -->
+                        <div class="col-lg-7 col-md-12">
+                            <label class="form-label small fw-bold mb-1" style="color:var(--text-dark);">
+                                <i class="fa-solid fa-user-tag text-primary me-1"></i>ชื่อคนยืม <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" id="borrow-name" class="form-control borrow-input" placeholder="พิมพ์ชื่อคนยืม หรือกดเลือกช่างด้านล่าง" required autocomplete="off">
+                            <!-- Quick staff chips -->
+                            <div class="borrow-quick-chips mt-2 d-flex flex-wrap gap-1 align-items-center">
+                                <span class="small text-muted me-1" style="font-size:0.75rem;"><i class="fa-solid fa-bolt text-warning me-1"></i>เลือกเร็ว:</span>
+                                <button type="button" class="borrow-chip-btn" data-borrow-person="ช่างเต้ย">ช่างเต้ย</button>
+                                <button type="button" class="borrow-chip-btn" data-borrow-person="ช่างส้ม">ช่างส้ม</button>
+                                <button type="button" class="borrow-chip-btn" data-borrow-person="ช่างหนู">ช่างหนู</button>
+                                <button type="button" class="borrow-chip-btn" data-borrow-person="ช่างอิ๋ว">ช่างอิ๋ว</button>
+                                <button type="button" class="borrow-chip-btn" data-borrow-person="ช่างแฟลช">ช่างแฟลช</button>
+                                <button type="button" class="borrow-chip-btn" data-borrow-person="ช่างโอ">ช่างโอ</button>
+                                <button type="button" class="borrow-chip-btn" data-borrow-person="ช่างเบ็ก">ช่างเบ็ก</button>
+                                <button type="button" class="borrow-chip-btn" data-borrow-person="ช่างเอก">ช่างเอก</button>
+                                <button type="button" class="borrow-chip-btn" data-borrow-person="ช่างทั่วไป">ช่างทั่วไป</button>
+                            </div>
+                        </div>
+
+                        <!-- Date & Time Borrowed -->
+                        <div class="col-lg-5 col-md-12">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label class="form-label small fw-bold mb-0" style="color:var(--text-dark);">
+                                    <i class="fa-solid fa-clock text-primary me-1"></i>วันและเวลาที่ยืม <span class="text-danger">*</span>
+                                </label>
+                                <button type="button" class="btn btn-link p-0 text-decoration-none small" id="btn-borrow-now" style="font-size:0.75rem;">
+                                    <i class="fa-solid fa-bolt me-1"></i>ใช้วันและเวลานี้
+                                </button>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <input type="date" id="borrow-date" class="form-control borrow-input" style="flex:1.2;">
+                                <input type="time" id="borrow-time" class="form-control borrow-input" style="flex:0.8;">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. กล่องกรอกรายการอะไหล่ (10 PIN Boxes ไม่ขาดไม่เกิน 10 ตัว + ชื่ออะไหล่ + จำนวน) -->
+                <div class="borrow-part-input-card mb-3 p-3 rounded" style="background:#ffffff; border:1.5px solid #cbd5e1; border-radius:12px;">
+                    <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                        <label class="form-label fw-bold mb-0" style="font-size:0.92rem;color:var(--text-dark);">
+                            <i class="fa-solid fa-barcode text-primary me-2"></i>เลขอะไหล่ที่ยืม (10 หลักพอดี ไม่ขาดไม่เกิน 10 ตัว) <span class="text-danger">*</span>
+                        </label>
+                        <div class="d-flex align-items-center gap-2">
+                            <span id="borrow-pin-status-badge" class="badge pin-status-pill">
+                                <i class="fa-solid fa-keyboard me-1"></i> 0 / 10 หลัก
+                            </span>
+                            <button type="button" class="btn btn-outline-secondary btn-sm rounded-pill px-2 py-0" id="btn-clear-borrow-pin" style="font-size:0.75rem;" title="ล้างเลข">
+                                <i class="fa-solid fa-eraser me-1"></i> ล้างเลข
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 10 Large PIN Boxes for Borrow -->
+                    <div class="pin-boxes-scroll-wrapper mb-2">
+                        <div class="pin-boxes-small" id="borrow-pin-boxes"></div>
+                    </div>
+
+                    <!-- Hidden input for PIN typing & paste -->
+                    <div class="pin-hidden-input-container-small">
+                        <input type="text" id="borrow-part-no-hidden" class="form-control form-control-sm" placeholder="กรอกเลขอะไหล่ 10 หลัก" required maxlength="10" autocomplete="off">
+                    </div>
+                    <input type="hidden" id="borrow-part-no" maxlength="10">
+
+                    <!-- Part Name, Stepper Qty, and Add Item Button -->
+                    <div class="row g-2 align-items-end mt-1">
+                        <div class="col-lg-6 col-md-6 col-12">
+                            <label class="form-label small fw-bold mb-1" style="color:var(--text-dark);">
+                                <i class="fa-solid fa-cube text-primary me-1"></i>ชื่ออะไหล่ / รายละเอียด <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" id="borrow-part-name" class="form-control borrow-input" placeholder="เช่น กรองโซล่า, ประเก็นฝาสูบ, ไดชาร์จ, บล็อกลม">
+                        </div>
+                        <div class="col-lg-3 col-md-6 col-6">
+                            <label class="form-label small fw-bold mb-1" style="color:var(--text-dark);">
+                                <i class="fa-solid fa-cubes-stacked text-primary me-1"></i>จำนวน <span class="text-danger">*</span>
+                            </label>
+                            <div class="qty-stepper-box">
+                                <button type="button" class="btn btn-qty-step" id="btn-borrow-qty-minus" title="ลดจำนวน">
+                                    <i class="fa-solid fa-minus"></i>
+                                </button>
+                                <input type="number" id="borrow-qty" class="form-control form-control-item text-center fw-bold qty-stepper-input" value="1" min="1">
+                                <button type="button" class="btn btn-qty-step" id="btn-borrow-qty-plus" title="เพิ่มจำนวน">
+                                    <i class="fa-solid fa-plus"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-lg-3 col-md-12 col-6">
+                            <button type="button" class="btn btn-warning w-100 fw-bold d-flex align-items-center justify-content-center gap-2 py-2" id="btn-borrow-add-item" style="border-radius:10px; background:#f59e0b; border:none; color:#000;">
+                                <i class="fa-solid fa-circle-plus"></i>
+                                <span>เพิ่มลงรายการ</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. ตะกร้ารายการอะไหล่ที่ยืม (สำหรับช่าง 1 คนที่ยืมมากกว่า 1 ชิ้น) -->
+                <div id="borrow-items-basket" class="card-custom p-3 mb-3" style="background:#f8fafc; border:1.5px dashed #cbd5e1; border-radius:12px; display:none;">
+                    <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                        <h6 class="fw-bold mb-0 text-dark d-flex align-items-center gap-2">
+                            <i class="fa-solid fa-clipboard-list text-primary"></i>
+                            <span>รายการอะไหล่ที่เลือกไว้สำหรับคนนี้</span>
+                            <span class="badge bg-primary rounded-pill" id="borrow-basket-count">0 รายการ</span>
+                        </h6>
+                        <button type="button" class="btn btn-link text-danger p-0 small text-decoration-none" id="btn-borrow-clear-basket">
+                            <i class="fa-solid fa-trash-can me-1"></i>ล้างรายการที่เลือกทั้งหมด
+                        </button>
+                    </div>
+                    <div id="borrow-basket-list" class="d-flex flex-column gap-2">
+                        <!-- Dynamic item rows rendered here -->
+                    </div>
+                </div>
+
+                <!-- 4. หมายเหตุ / วัตถุประสงค์ & ปุ่มบันทึกการยืมทั้งหมด -->
+                <div class="row g-3 align-items-end">
+                    <div class="col-lg-8 col-md-12">
+                        <label class="form-label small fw-bold mb-1" style="color:var(--text-dark);">
+                            <i class="fa-solid fa-comment-dots text-primary me-1"></i>หมายเหตุ / วัตถุประสงค์ (เช่น ทะเบียนรถลูกค้า, งานด่วน)
+                        </label>
+                        <input type="text" id="borrow-note" class="form-control borrow-input" placeholder="เช่น เอาไปลองใส่รถลูกค้าทะเบียน บน-4321, ยืมใช้หน้างานด่วน">
+                    </div>
+                    <div class="col-lg-4 col-md-12 d-flex align-items-end gap-2">
+                        <button type="button" class="btn btn-outline-secondary w-auto hidden" id="btn-borrow-cancel-edit">
+                            ยกเลิก
+                        </button>
+                        <button type="button" class="btn btn-primary w-100 borrow-submit-btn fw-bold d-flex align-items-center justify-content-center gap-2" id="btn-borrow-save">
+                            <i class="fa-solid fa-floppy-disk"></i>
+                            <span id="btn-borrow-save-text">บันทึกการยืมอะไหล่</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Search & Filters Toolbar -->
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+                <div class="borrow-search-wrapper">
+                    <i class="fa-solid fa-magnifying-glass borrow-search-icon"></i>
+                    <input type="text" id="borrow-search-input" class="borrow-search-input-pill" placeholder="ค้นหาชื่อคนยืม, ชื่ออะไหล่, เลขอะไหล่, หมายเหตุ...">
+                </div>
+                <div class="borrow-filter-pills d-flex align-items-center gap-2 flex-wrap" id="borrow-filter-group">
+                    <button type="button" class="borrow-filter-btn active" data-borrow-status="pending">
+                        <span class="pulse-dot warning me-1"></span>ยังไม่คืน (<span id="filter-count-pending">0</span>)
+                    </button>
+                    <button type="button" class="borrow-filter-btn" data-borrow-status="returned">
+                        <i class="fa-solid fa-check me-1"></i>คืนแล้ว (<span id="filter-count-returned">0</span>)
+                    </button>
+                    <button type="button" class="borrow-filter-btn" data-borrow-status="all">
+                        ทั้งหมด (<span id="filter-count-all">0</span>)
+                    </button>
+                </div>
+            </div>
+
+            <!-- List Header Card -->
+            <div class="borrow-list-header card-custom p-3 mb-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div class="d-flex align-items-center gap-2">
+                    <span class="borrow-icon-circle sm"><i class="fa-solid fa-list-ul"></i></span>
+                    <h6 class="fw-bold mb-0 text-dark" id="borrow-list-heading">รายการอะไหล่ที่กำลังยืมอยู่ (ยังไม่คืน)</h6>
+                </div>
+                <span class="badge borrow-badge-count" id="borrow-list-badge-count">0 รายการ</span>
+            </div>
+
+            <!-- Records List Container -->
+            <div id="borrow-records-container" class="borrow-records-grid">
+                <!-- Dynamically rendered borrow cards -->
+            </div>
+
+            <!-- Empty State -->
+            <div id="borrow-empty-state" class="card-custom p-5 text-center text-muted hidden">
+                <div class="mb-3 text-secondary opacity-50">
+                    <i class="fa-solid fa-handshake-slash fa-3x"></i>
+                </div>
+                <h5 class="fw-bold mb-1">ไม่มีรายการยืมอะไหล่ที่ตรงกับเงื่อนไข</h5>
+                <p class="small mb-0">กรอกข้อมูลด้านบนเพื่อบันทึกว่าใครยืมอะไหล่ชิ้นไหนไปได้เลยครับ</p>
+            </div>
+        </section>
     </div>
 
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
     <script src="app.js"></script>
     <script>
-        // PIN Input Logic (inline to ensure it works)
+        // Enhanced PIN Input & Form UX Logic
         function initTempPinInput() {
             const pinBoxes = document.getElementById('temp-pin-boxes');
             const hiddenInput = document.getElementById('temp-part-no-hidden');
             const partNoInput = document.getElementById('temp-part-no');
             const clearBtn = document.getElementById('btn-clear-temp-pin');
+            const statusBadge = document.getElementById('pin-status-badge');
+            const partNameInput = document.getElementById('temp-part-name');
+            const qtyInput = document.getElementById('temp-qty');
+            const qtyMinusBtn = document.getElementById('btn-temp-qty-minus');
+            const qtyPlusBtn = document.getElementById('btn-temp-qty-plus');
+            const addItemBtn = document.getElementById('btn-add-item');
             
             if (!pinBoxes || !hiddenInput) {
                 console.log('PIN elements not found, retrying...');
@@ -1044,7 +1572,7 @@
             // Clear existing boxes if any
             pinBoxes.innerHTML = '';
             
-            // Create 10 PIN boxes
+            // Create 10 large PIN boxes
             for (let i = 0; i < 10; i++) {
                 const box = document.createElement('div');
                 box.className = 'pin-box-small';
@@ -1072,6 +1600,17 @@
                 });
                 if (value.length < 10) {
                     boxes[value.length].classList.add('active');
+                    pinBoxes.classList.remove('pin-complete');
+                    if (statusBadge) {
+                        statusBadge.className = 'badge pin-status-pill';
+                        statusBadge.innerHTML = '<i class="fa-solid fa-keyboard me-1"></i> ' + value.length + ' / 10 หลัก';
+                    }
+                } else {
+                    pinBoxes.classList.add('pin-complete');
+                    if (statusBadge) {
+                        statusBadge.className = 'badge pin-status-pill is-complete';
+                        statusBadge.innerHTML = '<i class="fa-solid fa-circle-check me-1"></i> ครบ 10 หลักแล้ว';
+                    }
                 }
                 
                 // Sync with actual input
@@ -1081,6 +1620,26 @@
             hiddenInput.addEventListener('input', function () {
                 this.value = this.value.toUpperCase();
                 updateBoxes();
+                // Auto-advance to part name when 10 digits are filled
+                if (this.value.length === 10 && partNameInput) {
+                    setTimeout(function() {
+                        partNameInput.focus();
+                    }, 80);
+                }
+            });
+            
+            // Smart Paste: strips dashes, spaces and auto-fills 10 digits
+            hiddenInput.addEventListener('paste', function (e) {
+                e.preventDefault();
+                const pasteText = (e.clipboardData || window.clipboardData).getData('text') || '';
+                const clean = pasteText.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 10);
+                this.value = clean;
+                updateBoxes();
+                if (clean.length === 10 && partNameInput) {
+                    setTimeout(function() {
+                        partNameInput.focus();
+                    }, 80);
+                }
             });
             
             hiddenInput.addEventListener('focus', function () {
@@ -1106,11 +1665,45 @@
                         box.classList.remove('filled', 'active');
                     });
                     boxes[0].classList.add('active');
+                    pinBoxes.classList.remove('pin-complete');
+                    if (statusBadge) {
+                        statusBadge.className = 'badge pin-status-pill';
+                        statusBadge.innerHTML = '<i class="fa-solid fa-keyboard me-1"></i> 0 / 10 หลัก';
+                    }
                     hiddenInput.focus();
                 });
             }
+
+            // Stepper buttons for Quantity
+            if (qtyMinusBtn && qtyInput) {
+                qtyMinusBtn.addEventListener('click', function() {
+                    let val = parseInt(qtyInput.value) || 1;
+                    if (val > 1) {
+                        qtyInput.value = val - 1;
+                    }
+                });
+            }
+            if (qtyPlusBtn && qtyInput) {
+                qtyPlusBtn.addEventListener('click', function() {
+                    let val = parseInt(qtyInput.value) || 1;
+                    qtyInput.value = val + 1;
+                });
+            }
+
+            // Enter key shortcuts to quickly add item
+            ['temp-part-name', 'temp-qty', 'temp-item-note'].forEach(function(fieldId) {
+                const el = document.getElementById(fieldId);
+                if (el) {
+                    el.addEventListener('keydown', function(e) {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            if (addItemBtn) addItemBtn.click();
+                        }
+                    });
+                }
+            });
             
-            console.log('PIN input initialized successfully');
+            console.log('Enhanced PIN & Item input UX initialized successfully');
         }
         
         // Initialize when ready

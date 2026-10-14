@@ -40,6 +40,7 @@ let ordersCache = {
 };
 
 let currentPerson = 'tey';
+let lastSelectedPerson = 'tey';
 let currentMenu = 'home';
 let tempItems = [];
 let depositItems = [];
@@ -47,7 +48,132 @@ let editingDepositId = null;
 let editingItemId = null;
 let deadlineAlerts = [];
 let noteAlerts = [];
+let mobileAlerts = [];
 let quickAddBatchId = null; // For quick add to batch
+
+/* ===================================================
+   Growl Notification Alert System (Matching growl-alert-box.png)
+   Duration: ~1.5 seconds (1500ms) with yellow progress countdown bar
+   (Compact, fast dismiss, no pause on hover)
+=================================================== */
+function showGrowl(message, type = 'info', duration = 1500) {
+    let container = document.getElementById('growl-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'growl-container';
+        container.className = 'growl-container';
+        container.setAttribute('aria-live', 'polite');
+        document.body.appendChild(container);
+    }
+
+    const validTypes = ['info', 'error', 'success', 'warning'];
+    const finalType = validTypes.includes(type) ? type : 'info';
+
+    const iconMap = {
+        info: '<i class="fa-solid fa-info"></i>',
+        error: '<i class="fa-solid fa-xmark"></i>',
+        success: '<i class="fa-solid fa-check"></i>',
+        warning: '<i class="fa-solid fa-exclamation"></i>'
+    };
+
+    const box = document.createElement('div');
+    box.className = `growl-box growl-${finalType}`;
+    box.setAttribute('role', 'alert');
+
+    // Safe message escaping if string, preserving line breaks
+    let safeMsg = '';
+    if (typeof message === 'string') {
+        safeMsg = message
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;')
+            .replace(/\n/g, '<br>');
+    } else {
+        safeMsg = String(message);
+    }
+
+    box.innerHTML = `
+        <div class="growl-icon-circle">${iconMap[finalType]}</div>
+        <div class="growl-message">${safeMsg}</div>
+        <button type="button" class="growl-close-btn" aria-label="ปิด"><i class="fa-solid fa-xmark"></i></button>
+        <div class="growl-progress" style="animation-duration: ${duration}ms;"></div>
+    `;
+
+    let timer = null;
+
+    function closeBox() {
+        if (box.classList.contains('growl-closing')) return;
+        box.classList.add('growl-closing');
+        if (timer) clearTimeout(timer);
+        setTimeout(() => {
+            if (box.parentNode) {
+                box.parentNode.removeChild(box);
+            }
+        }, 250);
+    }
+
+    box.querySelector('.growl-close-btn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeBox();
+    });
+
+    box.addEventListener('click', () => {
+        closeBox();
+    });
+
+    container.appendChild(box);
+
+    if (duration > 0) {
+        timer = setTimeout(closeBox, duration);
+    }
+
+    return box;
+}
+
+window.showGrowl = showGrowl;
+
+// Override window.alert to automatically route all alerts through showGrowl
+const _originalAlert = window.alert;
+window.alert = function (msg) {
+    if (msg === undefined || msg === null) return;
+    const str = String(msg);
+    // Ignore overdue delivery alerts so they do not clutter or fill up the screen
+    if (str.includes('มีของที่ควรมาส่งแล้ว') || str.includes('ควรมาส่ง')) {
+        return;
+    }
+    let alertType = 'info';
+    if (
+        str.includes('ผิดพลาด') ||
+        str.includes('ล้มเหลว') ||
+        str.includes('ไม่สำเร็จ') ||
+        str.toLowerCase().includes('error') ||
+        str.includes('ไม่พบ')
+    ) {
+        alertType = 'error';
+    } else if (
+        str.includes('กรุณา') ||
+        str.includes('โปรด') ||
+        str.includes('คำเตือน') ||
+        str.toLowerCase().includes('warning') ||
+        str.includes('ครบกำหนด') ||
+        str.includes('ซ้ำ') ||
+        str.includes('ต้องมี') ||
+        str.includes('ต้องมากกว่า') ||
+        str.includes('ต้องไม่')
+    ) {
+        alertType = 'warning';
+    } else if (
+        str.includes('สำเร็จ') ||
+        str.includes('เรียบร้อย') ||
+        str.includes('บันทึก') ||
+        str.toLowerCase().includes('success')
+    ) {
+        alertType = 'success';
+    }
+    showGrowl(str, alertType, 1500);
+};
 
 function loadAll() {
     return ordersCache;
@@ -60,6 +186,7 @@ function saveAll(data) {
         console.error('Error saving to Firebase:', error);
         alert('เกิดข้อผิดพลาดในการบันทึกข้อมูล: ' + error.message);
     });
+    updateDueBadge();
 }
 
 function getOrders() {
@@ -73,6 +200,7 @@ function setOrders(list) {
         console.error('Error saving to Firebase:', error);
         alert('เกิดข้อผิดพลาดในการบันทึกข้อมูล: ' + error.message);
     });
+    updateDueBadge();
 }
 
 function todayTh() {
@@ -131,7 +259,6 @@ function showMenu(menu) {
     });
     if (menu === 'list') {
         renderTable();
-        setTimeout(checkDeliveries, 500);
     }
 }
 
@@ -139,6 +266,7 @@ function openPerson(id) {
     try {
         editingItemId = null;
         currentPerson = id;
+        lastSelectedPerson = id;
         const name = PEOPLE[id].name;
         const headerSub = document.getElementById('header-sub');
 
@@ -175,9 +303,17 @@ function openPerson(id) {
             });
             boxes[0].classList.add('active');
         }
+        const pinContainer = document.getElementById('temp-pin-boxes');
+        if (pinContainer) pinContainer.classList.remove('pin-complete');
+        const statusBadge = document.getElementById('pin-status-badge');
+        if (statusBadge) {
+            statusBadge.className = 'badge pin-status-pill';
+            statusBadge.innerHTML = '<i class="fa-solid fa-keyboard me-1"></i> 0 / 10 หลัก';
+        }
 
         renderTempItems();
         updatePersonTabs();
+        updateOrderNoteChips(id);
 
         // Show person view, hide other views
         document.getElementById('view-search-all').classList.add('hidden');
@@ -187,6 +323,10 @@ function openPerson(id) {
         document.getElementById('view-deposit').classList.add('hidden');
         const viewCal = document.getElementById('view-calendar');
         if (viewCal) viewCal.classList.add('hidden');
+        const viewMs = document.getElementById('view-mobile-service');
+        if (viewMs) viewMs.classList.add('hidden');
+        const viewBorrow = document.getElementById('view-borrow');
+        if (viewBorrow) viewBorrow.classList.add('hidden');
         document.getElementById('view-person').classList.remove('hidden');
 
         // Add animation to logo
@@ -233,6 +373,10 @@ function showSearchAll() {
     document.getElementById('view-deposit').classList.add('hidden');
     const viewCal = document.getElementById('view-calendar');
     if (viewCal) viewCal.classList.add('hidden');
+    const viewMs = document.getElementById('view-mobile-service');
+    if (viewMs) viewMs.classList.add('hidden');
+    const viewBorrow = document.getElementById('view-borrow');
+    if (viewBorrow) viewBorrow.classList.add('hidden');
     document.getElementById('view-search-all').classList.remove('hidden');
     renderSearchAll();
 
@@ -264,6 +408,10 @@ function showNotes() {
     document.getElementById('view-deposit').classList.add('hidden');
     const viewCal = document.getElementById('view-calendar');
     if (viewCal) viewCal.classList.add('hidden');
+    const viewMs = document.getElementById('view-mobile-service');
+    if (viewMs) viewMs.classList.add('hidden');
+    const viewBorrow = document.getElementById('view-borrow');
+    if (viewBorrow) viewBorrow.classList.add('hidden');
     document.getElementById('view-notes').classList.remove('hidden');
 
     // Load notes from Firebase
@@ -297,6 +445,10 @@ function showAlerts() {
     document.getElementById('view-deposit').classList.add('hidden');
     const viewCal = document.getElementById('view-calendar');
     if (viewCal) viewCal.classList.add('hidden');
+    const viewMs = document.getElementById('view-mobile-service');
+    if (viewMs) viewMs.classList.add('hidden');
+    const viewBorrow = document.getElementById('view-borrow');
+    if (viewBorrow) viewBorrow.classList.add('hidden');
     document.getElementById('view-alerts').classList.remove('hidden');
 
     // Load received items from Firebase
@@ -330,6 +482,10 @@ function showDeposit() {
     document.getElementById('view-due-alerts').classList.add('hidden');
     const viewCal = document.getElementById('view-calendar');
     if (viewCal) viewCal.classList.add('hidden');
+    const viewMs = document.getElementById('view-mobile-service');
+    if (viewMs) viewMs.classList.add('hidden');
+    const viewBorrow = document.getElementById('view-borrow');
+    if (viewBorrow) viewBorrow.classList.add('hidden');
     document.getElementById('view-deposit').classList.remove('hidden');
 
     // Reset to new tab
@@ -374,6 +530,10 @@ function showDueAlerts() {
     document.getElementById('view-deposit').classList.add('hidden');
     const viewCal = document.getElementById('view-calendar');
     if (viewCal) viewCal.classList.add('hidden');
+    const viewMs = document.getElementById('view-mobile-service');
+    if (viewMs) viewMs.classList.add('hidden');
+    const viewBorrow = document.getElementById('view-borrow');
+    if (viewBorrow) viewBorrow.classList.add('hidden');
     document.getElementById('view-due-alerts').classList.remove('hidden');
 
     // Load due items
@@ -406,6 +566,10 @@ function showCalendar() {
     document.getElementById('view-alerts').classList.add('hidden');
     document.getElementById('view-due-alerts').classList.add('hidden');
     document.getElementById('view-deposit').classList.add('hidden');
+    const viewMs = document.getElementById('view-mobile-service');
+    if (viewMs) viewMs.classList.add('hidden');
+    const viewBorrow = document.getElementById('view-borrow');
+    if (viewBorrow) viewBorrow.classList.add('hidden');
     const viewCal = document.getElementById('view-calendar');
     if (viewCal) viewCal.classList.remove('hidden');
 
@@ -423,6 +587,706 @@ function showCalendar() {
         void logoBox.offsetWidth;
         logoBox.classList.add('pulse');
     }
+}
+
+// ==========================================================================
+// MOBILE SERVICE MODULE
+// ==========================================================================
+
+let mobileServiceData = {};
+let editingMobileServiceId = null;
+let mobileServiceFilter = 'all';
+let mobileServiceSearchQuery = '';
+let isMobileServiceInitialized = false;
+
+function showMobileService() {
+    currentPerson = 'mobile-service';
+    const headerSub = document.getElementById('header-sub');
+    if (headerSub) {
+        headerSub.classList.add('fade');
+        setTimeout(function () {
+            headerSub.textContent = 'Mobile Service - จัดของให้ช่างตามเลขทะเบียนรถ';
+            headerSub.classList.remove('fade');
+        }, 150);
+    }
+
+    updatePersonTabs();
+
+    // Hide other views
+    document.getElementById('view-person').classList.add('hidden');
+    document.getElementById('view-search-all').classList.add('hidden');
+    document.getElementById('view-notes').classList.add('hidden');
+    document.getElementById('view-alerts').classList.add('hidden');
+    document.getElementById('view-due-alerts').classList.add('hidden');
+    document.getElementById('view-deposit').classList.add('hidden');
+    const viewCal = document.getElementById('view-calendar');
+    if (viewCal) viewCal.classList.add('hidden');
+    const viewBorrow = document.getElementById('view-borrow');
+    if (viewBorrow) viewBorrow.classList.add('hidden');
+
+    const viewMs = document.getElementById('view-mobile-service');
+    if (viewMs) viewMs.classList.remove('hidden');
+
+    // Default service date to today if empty
+    const dateInput = document.getElementById('ms-service-date');
+    if (dateInput && !dateInput.value) {
+        dateInput.value = new Date().toISOString().split('T')[0];
+    }
+
+    initMobileService();
+    renderMobileServices();
+
+    // Add animation to logo
+    const logoBox = document.querySelector('.logo-box');
+    if (logoBox) {
+        logoBox.classList.remove('pulse');
+        void logoBox.offsetWidth;
+        logoBox.classList.add('pulse');
+    }
+}
+
+function initMobileService() {
+    if (isMobileServiceInitialized) return;
+    isMobileServiceInitialized = true;
+
+    // Status toggle buttons (ยังไม่ได้จัดของ vs จัดของไว้แล้ว)
+    const btnPending = document.getElementById('ms-btn-status-pending');
+    const btnReady = document.getElementById('ms-btn-status-ready');
+
+    if (btnPending) {
+        btnPending.addEventListener('click', function () {
+            setMobileServiceStatus('pending');
+        });
+    }
+    if (btnReady) {
+        btnReady.addEventListener('click', function () {
+            setMobileServiceStatus('ready');
+        });
+    }
+
+    // Quick Date buttons
+    const btnToday = document.getElementById('ms-quick-today');
+    const btnTomorrow = document.getElementById('ms-quick-tomorrow');
+    const btnClearDate = document.getElementById('ms-quick-clear');
+    const dateInput = document.getElementById('ms-service-date');
+
+    if (btnToday && dateInput) {
+        btnToday.addEventListener('click', function () {
+            dateInput.value = getTodayIsoString();
+        });
+    }
+    if (btnTomorrow && dateInput) {
+        btnTomorrow.addEventListener('click', function () {
+            dateInput.value = getTomorrowIsoString();
+        });
+    }
+    if (btnClearDate && dateInput) {
+        btnClearDate.addEventListener('click', function () {
+            dateInput.value = '';
+        });
+    }
+
+    // New Job button (top right of form)
+    const btnNewJob = document.getElementById('btn-ms-new-job');
+    if (btnNewJob) {
+        btnNewJob.addEventListener('click', function () {
+            resetMobileServiceForm();
+            const plateInput = document.getElementById('ms-license-plate');
+            if (plateInput) plateInput.focus();
+        });
+    }
+
+    // Save button
+    const btnSave = document.getElementById('btn-ms-save');
+    if (btnSave) {
+        btnSave.addEventListener('click', saveMobileService);
+    }
+
+    // Cancel edit button
+    const btnCancelEdit = document.getElementById('ms-btn-cancel-edit');
+    if (btnCancelEdit) {
+        btnCancelEdit.addEventListener('click', cancelEditMobileService);
+    }
+
+    // Search input
+    const searchInput = document.getElementById('ms-search-input');
+    if (searchInput) {
+        searchInput.addEventListener('input', function () {
+            mobileServiceSearchQuery = this.value.trim().toLowerCase();
+            renderMobileServices();
+        });
+    }
+
+    // Status filter buttons in search/filter row
+    const filterGroup = document.getElementById('ms-filter-status-group');
+    if (filterGroup) {
+        filterGroup.querySelectorAll('[data-status-filter]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                setMobileServiceFilter(this.dataset.statusFilter);
+            });
+        });
+    }
+
+    // Header Status Pills (click to filter)
+    document.querySelectorAll('.ms-stat-pill[data-pill-filter]').forEach(function (pill) {
+        pill.addEventListener('click', function () {
+            setMobileServiceFilter(this.dataset.pillFilter);
+        });
+    });
+
+    // Listen to Firebase Realtime Database
+    listenMobileServiceDatabase();
+}
+
+function getTodayIsoString() {
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+function getTomorrowIsoString() {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+function setMobileServiceStatus(status) {
+    const statusVal = document.getElementById('ms-status-val');
+    if (statusVal) statusVal.value = status;
+
+    const btnPending = document.getElementById('ms-btn-status-pending');
+    const btnReady = document.getElementById('ms-btn-status-ready');
+
+    if (btnPending && btnReady) {
+        if (status === 'ready') {
+            btnPending.className = 'ms-status-btn outline-pending';
+            btnReady.className = 'ms-status-btn active-ready';
+        } else {
+            btnPending.className = 'ms-status-btn active-pending';
+            btnReady.className = 'ms-status-btn outline-ready';
+        }
+    }
+}
+
+function setMobileServiceFilter(filter) {
+    mobileServiceFilter = filter || 'all';
+
+    // Update filter buttons in controls row
+    const filterGroup = document.getElementById('ms-filter-status-group');
+    if (filterGroup) {
+        filterGroup.querySelectorAll('[data-status-filter]').forEach(function (btn) {
+            btn.classList.toggle('active', btn.dataset.statusFilter === mobileServiceFilter);
+        });
+    }
+
+    // Update header pills
+    document.querySelectorAll('.ms-stat-pill[data-pill-filter]').forEach(function (pill) {
+        pill.classList.toggle('active', pill.dataset.pillFilter === mobileServiceFilter);
+    });
+
+    renderMobileServices();
+}
+
+let isMsDbListening = false;
+function listenMobileServiceDatabase() {
+    if (isMsDbListening) return;
+    isMsDbListening = true;
+
+    database.ref('mobileService').on('value', function (snapshot) {
+        mobileServiceData = snapshot.val() || {};
+        updateMobileServiceStats();
+        if (currentPerson === 'mobile-service') {
+            renderMobileServices();
+        }
+    }, function (error) {
+        console.error('Error in mobileService listener:', error);
+    });
+}
+
+function updateMobileServiceStats() {
+    const records = Object.values(mobileServiceData || {});
+    const todayStr = getTodayIsoString();
+
+    let total = records.length;
+    let pending = 0;
+    let ready = 0;
+    let due = 0;
+    let urgentDue = 0;
+
+    records.forEach(function (item) {
+        if (item.status === 'ready') {
+            ready++;
+        } else {
+            pending++;
+        }
+
+        if (item.serviceDate && item.serviceDate <= todayStr) {
+            due++;
+            if (item.status !== 'ready') {
+                urgentDue++;
+            }
+        }
+    });
+
+    const elTotal = document.getElementById('ms-stat-total');
+    const elPending = document.getElementById('ms-stat-pending');
+    const elReady = document.getElementById('ms-stat-ready');
+    const elDue = document.getElementById('ms-stat-due');
+
+    if (elTotal) elTotal.textContent = total;
+    if (elPending) elPending.textContent = pending;
+    if (elReady) elReady.textContent = ready;
+    if (elDue) elDue.textContent = due;
+
+    // Top navigation tab pending notification badge
+    const badge = document.getElementById('badge-mobile-pending');
+    if (badge) {
+        const notifyCount = pending > 0 ? pending : due;
+        if (notifyCount > 0) {
+            badge.textContent = notifyCount;
+            badge.classList.remove('hidden');
+            if (urgentDue > 0) {
+                badge.className = 'badge rounded-pill bg-danger ms-1 mobile-notification-badge is-urgent';
+                badge.title = 'มี ' + notifyCount + ' รายการรอจัดของ (' + urgentDue + ' รายการครบกำหนดวันนี้/เลยกำหนด!)';
+            } else {
+                badge.className = 'badge rounded-pill bg-danger ms-1 mobile-notification-badge';
+                badge.title = 'มี ' + notifyCount + ' รายการรอจัดของ';
+            }
+        } else {
+            badge.textContent = '0';
+            badge.className = 'badge rounded-pill bg-danger ms-1 mobile-notification-badge hidden';
+        }
+    }
+
+    // Update floating mobile service alert button & sidebar
+    updateMobileAlertsUI();
+}
+
+function saveMobileService() {
+    const plateInput = document.getElementById('ms-license-plate');
+    const noteInput = document.getElementById('ms-note');
+    const dateInput = document.getElementById('ms-service-date');
+    const techInput = document.getElementById('ms-technician');
+    const statusVal = document.getElementById('ms-status-val');
+
+    const licensePlate = plateInput ? plateInput.value.trim() : '';
+    const note = noteInput ? noteInput.value.trim() : '';
+    const serviceDate = dateInput ? dateInput.value : '';
+    const technician = techInput ? techInput.value.trim() : '';
+    const status = statusVal ? statusVal.value : 'pending';
+
+    if (!licensePlate) {
+        alert('กรุณากรอกเลขทะเบียนรถ');
+        if (plateInput) plateInput.focus();
+        return;
+    }
+
+    const id = editingMobileServiceId || ('ms_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6));
+
+    const record = {
+        id: id,
+        licensePlate: licensePlate,
+        status: status,
+        technician: technician || '-',
+        serviceDate: serviceDate,
+        note: note,
+        updatedAt: todayTh() + ' ' + getCurrentTime()
+    };
+
+    if (!editingMobileServiceId) {
+        record.createdAt = todayTh();
+        record.createdTime = getCurrentTime();
+    } else if (mobileServiceData[editingMobileServiceId]) {
+        record.createdAt = mobileServiceData[editingMobileServiceId].createdAt || todayTh();
+        record.createdTime = mobileServiceData[editingMobileServiceId].createdTime || getCurrentTime();
+    }
+
+    const isEdit = !!editingMobileServiceId;
+
+    database.ref('mobileService/' + id).set(record).then(function () {
+        resetMobileServiceForm();
+        alert(isEdit ? 'แก้ไขข้อมูล Mobile Service เรียบร้อยแล้ว' : 'บันทึกงาน Mobile Service ทะเบียน ' + licensePlate + ' เรียบร้อยแล้ว');
+    }).catch(function (error) {
+        console.error('Error saving mobile service:', error);
+        alert('เกิดข้อผิดพลาดในการบันทึกข้อมูล: ' + error.message);
+    });
+}
+
+function resetMobileServiceForm() {
+    editingMobileServiceId = null;
+
+    const editIdInput = document.getElementById('ms-edit-id');
+    if (editIdInput) editIdInput.value = '';
+
+    const formTitle = document.getElementById('ms-form-title');
+    if (formTitle) {
+        formTitle.textContent = 'บันทึกงาน Mobile Service ใหม่';
+    }
+
+    const btnSave = document.getElementById('btn-ms-save');
+    if (btnSave) {
+        btnSave.innerHTML = '<i class="fa-solid fa-floppy-disk me-2"></i>บันทึกงาน Mobile Service';
+    }
+
+    const btnCancelEdit = document.getElementById('ms-btn-cancel-edit');
+    if (btnCancelEdit) btnCancelEdit.classList.add('hidden');
+
+    const plateInput = document.getElementById('ms-license-plate');
+    if (plateInput) plateInput.value = '';
+
+    const techInput = document.getElementById('ms-technician');
+    if (techInput) techInput.value = '';
+
+    const dateInput = document.getElementById('ms-service-date');
+    if (dateInput) dateInput.value = '';
+
+    const noteInput = document.getElementById('ms-note');
+    if (noteInput) noteInput.value = '';
+
+    // Reset status to pending
+    setMobileServiceStatus('pending');
+}
+
+function cancelEditMobileService() {
+    resetMobileServiceForm();
+}
+
+function editMobileService(id) {
+    const item = mobileServiceData[id];
+    if (!item) return;
+
+    editingMobileServiceId = id;
+
+    const editIdInput = document.getElementById('ms-edit-id');
+    if (editIdInput) editIdInput.value = id;
+
+    const formTitle = document.getElementById('ms-form-title');
+    if (formTitle) {
+        formTitle.textContent = 'แก้ไขงาน Mobile Service: ' + item.licensePlate;
+    }
+
+    const btnSave = document.getElementById('btn-ms-save');
+    if (btnSave) {
+        btnSave.innerHTML = '<i class="fa-solid fa-floppy-disk me-2"></i>อัปเดตงาน Mobile Service';
+    }
+
+    const btnCancelEdit = document.getElementById('ms-btn-cancel-edit');
+    if (btnCancelEdit) btnCancelEdit.classList.remove('hidden');
+
+    const plateInput = document.getElementById('ms-license-plate');
+    if (plateInput) plateInput.value = item.licensePlate || '';
+
+    const techInput = document.getElementById('ms-technician');
+    if (techInput) techInput.value = item.technician || '';
+
+    const dateInput = document.getElementById('ms-service-date');
+    if (dateInput) dateInput.value = item.serviceDate || '';
+
+    const noteInput = document.getElementById('ms-note');
+    if (noteInput) noteInput.value = item.note || '';
+
+    const status = item.status === 'ready' ? 'ready' : 'pending';
+    setMobileServiceStatus(status);
+
+    const formCard = document.getElementById('ms-form-card');
+    if (formCard) {
+        formCard.scrollIntoView({ behavior: 'smooth' });
+    }
+    if (plateInput) plateInput.focus();
+}
+
+function deleteMobileService(id) {
+    const item = mobileServiceData[id];
+    const plate = item ? item.licensePlate : '';
+    if (!confirm('ยืนยันที่จะลบรายการ Mobile Service ทะเบียน ' + (plate ? '"' + plate + '"' : '') + ' หรือไม่?')) {
+        return;
+    }
+
+    database.ref('mobileService/' + id).remove().then(function () {
+        if (editingMobileServiceId === id) {
+            resetMobileServiceForm();
+        }
+        showGrowl('ลบรายการ Mobile Service ทะเบียน ' + (plate ? '"' + plate + '"' : '') + ' เรียบร้อยแล้ว', 'info');
+    }).catch(function (error) {
+        console.error('Error deleting mobile service:', error);
+        alert('เกิดข้อผิดพลาดในการลบรายการ: ' + error.message);
+    });
+}
+
+function quickToggleMobileStatus(id, newStatus) {
+    const item = mobileServiceData[id];
+    if (!item) return;
+
+    database.ref('mobileService/' + id).update({
+        status: newStatus,
+        updatedAt: todayTh() + ' ' + getCurrentTime()
+    }).then(function () {
+        showGrowl(newStatus === 'ready' ? 'เปลี่ยนสถานะ: จัดของแล้ว (' + (item.licensePlate || '') + ')' : 'เปลี่ยนสถานะ: ยังไม่ได้จัดของ (' + (item.licensePlate || '') + ')', 'success');
+    }).catch(function (error) {
+        console.error('Error updating status:', error);
+        alert('เกิดข้อผิดพลาดในการเปลี่ยนสถานะ: ' + error.message);
+    });
+}
+
+function renderMobileServices() {
+    const container = document.getElementById('ms-records-container');
+    const empty = document.getElementById('ms-records-empty');
+    const countBadge = document.getElementById('ms-list-count');
+    if (!container) return;
+
+    let records = Object.values(mobileServiceData || {});
+    const todayStr = getTodayIsoString();
+
+    // Filter by status or due
+    if (mobileServiceFilter && mobileServiceFilter !== 'all') {
+        if (mobileServiceFilter === 'due') {
+            records = records.filter(function (r) {
+                return r.serviceDate && r.serviceDate <= todayStr;
+            });
+        } else {
+            records = records.filter(function (r) {
+                const st = r.status === 'ready' ? 'ready' : 'pending';
+                return st === mobileServiceFilter;
+            });
+        }
+    }
+
+    // Filter by search query (License plate, note, technician)
+    if (mobileServiceSearchQuery) {
+        const q = mobileServiceSearchQuery;
+        records = records.filter(function (r) {
+            const matchPlate = (r.licensePlate || '').toLowerCase().includes(q);
+            const matchTech = (r.technician || '').toLowerCase().includes(q);
+            const matchNote = (r.note || '').toLowerCase().includes(q);
+            return matchPlate || matchTech || matchNote;
+        });
+    }
+
+    // Sort order:
+    // 1. Due today / Overdue pending items first
+    // 2. Pending items
+    // 3. Ready items
+    // 4. Newest first
+    records.sort(function (a, b) {
+        const isDueA = a.serviceDate && a.serviceDate <= todayStr && a.status !== 'ready';
+        const isDueB = b.serviceDate && b.serviceDate <= todayStr && b.status !== 'ready';
+        if (isDueA && !isDueB) return -1;
+        if (!isDueA && isDueB) return 1;
+
+        const statusA = a.status === 'ready' ? 2 : 1;
+        const statusB = b.status === 'ready' ? 2 : 1;
+        if (statusA !== statusB) return statusA - statusB;
+
+        return (b.id || '').localeCompare(a.id || '');
+    });
+
+    if (countBadge) {
+        countBadge.innerHTML = '<i class="fa-solid fa-chart-simple me-1"></i>' + records.length + ' รายการ';
+    }
+
+    if (records.length === 0) {
+        container.innerHTML = '';
+        if (empty) empty.classList.remove('hidden');
+        return;
+    }
+
+    if (empty) empty.classList.add('hidden');
+
+    let html = '';
+    records.forEach(function (r) {
+        const isReady = r.status === 'ready';
+        const status = isReady ? 'ready' : 'pending';
+        let statusBadgeHtml = '';
+        let quickActionHtml = '';
+
+        if (!isReady) {
+            statusBadgeHtml = '<span class="ms-badge-status pending"><span class="pulse-dot warning"></span> ยังไม่ได้จัดของ</span>';
+            quickActionHtml = '<button type="button" class="btn btn-sm btn-success ms-quick-btn fw-bold" onclick="quickToggleMobileStatus(\'' + r.id + '\', \'ready\')" title="กดเพื่อเปลี่ยนเป็นจัดของแล้ว"><i class="fa-solid fa-circle-check me-1"></i>เปลี่ยนเป็น: จัดของแล้ว</button>';
+        } else {
+            statusBadgeHtml = '<span class="ms-badge-status ready"><i class="fa-solid fa-circle-check"></i> จัดของไว้แล้ว</span>';
+            quickActionHtml = '<button type="button" class="btn btn-sm btn-outline-warning ms-quick-btn fw-bold" onclick="quickToggleMobileStatus(\'' + r.id + '\', \'pending\')" title="กดเพื่อเปลี่ยนกลับเป็นยังไม่ได้จัดของ"><i class="fa-solid fa-rotate-left me-1"></i>เปลี่ยนเป็น: ยังไม่ได้จัดของ</button>';
+        }
+
+        // Due alert badge
+        let dueBadgeHtml = '';
+        let isDueCard = false;
+        if (r.serviceDate && r.serviceDate <= todayStr) {
+            isDueCard = true;
+            if (r.serviceDate === todayStr) {
+                dueBadgeHtml = '<span class="ms-badge-due-today"><i class="fa-solid fa-bell me-1"></i>ต้องมารับวันนี้!</span>';
+            } else {
+                dueBadgeHtml = '<span class="ms-badge-overdue"><i class="fa-solid fa-triangle-exclamation me-1"></i>เลยกำหนดรับของ!</span>';
+            }
+        }
+
+        // Format dates
+        let dateDisplay = '-';
+        if (r.serviceDate && r.serviceDate.includes('-')) {
+            const parts = r.serviceDate.split('-');
+            if (parts.length === 3) {
+                dateDisplay = parts[2] + '/' + parts[1] + '/' + (parseInt(parts[0]) + 543);
+            }
+        } else if (r.serviceDate) {
+            dateDisplay = r.serviceDate;
+        }
+
+        // Notes box
+        let noteHtml = '';
+        if (r.note) {
+            noteHtml = '<div class="mt-2 p-2 rounded bg-warning-subtle text-warning-emphasis small border border-warning-subtle">' +
+                '<i class="fa-solid fa-note-sticky me-1"></i><strong>หมายเหตุ / รายละเอียด:</strong> ' + escapeHtml(r.note) +
+            '</div>';
+        }
+
+        html += '<div class="ms-record-card status-' + status + (isDueCard ? ' is-due' : '') + ' p-3 p-md-4 mb-3" id="ms-card-' + r.id + '">' +
+            '<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3 pb-2 border-bottom">' +
+                '<div class="d-flex align-items-center gap-2 flex-wrap">' +
+                    '<span class="license-plate-badge">' +
+                        '<i class="fa-solid fa-car plate-icon"></i>' +
+                        escapeHtml(r.licensePlate) +
+                    '</span>' +
+                    statusBadgeHtml +
+                    dueBadgeHtml +
+                '</div>' +
+                '<div class="d-flex align-items-center gap-2 flex-wrap">' +
+                    quickActionHtml +
+                    '<button type="button" class="btn btn-sm btn-outline-secondary ms-quick-btn" onclick="printMobileServiceSlip(\'' + r.id + '\')" title="พิมพ์ใบจัดของ/สลิป"><i class="fa-solid fa-print me-1"></i>พิมพ์</button>' +
+                    '<button type="button" class="btn btn-sm btn-outline-primary ms-quick-btn" onclick="editMobileService(\'' + r.id + '\')" title="แก้ไขข้อมูล"><i class="fa-solid fa-pen-to-square me-1"></i>แก้ไข</button>' +
+                    '<button type="button" class="btn btn-sm btn-outline-danger ms-quick-btn" onclick="deleteMobileService(\'' + r.id + '\')" title="ลบรายการ"><i class="fa-solid fa-trash"></i></button>' +
+                '</div>' +
+            '</div>' +
+
+            '<div class="row g-2 align-items-center" style="font-size:0.92rem;">' +
+                (r.technician && r.technician !== '-' ? 
+                '<div class="col-md-6 col-12">' +
+                    '<span class="text-muted small d-block">ช่างที่จะเอาของไป:</span>' +
+                    '<strong class="text-primary fs-6"><i class="fa-solid fa-wrench me-1"></i>' + escapeHtml(r.technician) + '</strong>' +
+                '</div>' : '') +
+                '<div class="col-md-6 col-12">' +
+                    '<span class="text-muted small d-block">วันที่ช่างจะมาเอาของ (แจ้งเตือน):</span>' +
+                    '<span><i class="fa-solid fa-calendar-day me-1 text-primary"></i><strong>' + dateDisplay + '</strong></span>' +
+                '</div>' +
+            '</div>' +
+
+            noteHtml +
+
+            '<div class="d-flex justify-content-between align-items-center mt-3 pt-2 text-muted" style="font-size:0.75rem; border-top: 1px dashed var(--border-color);">' +
+                '<span>บันทึกเมื่อ: ' + (r.createdAt || '-') + ' ' + (r.createdTime || '') + '</span>' +
+                (r.updatedAt ? '<span>อัปเดตล่าสุด: ' + r.updatedAt + '</span>' : '') +
+            '</div>' +
+        '</div>';
+    });
+
+    container.innerHTML = html;
+}
+
+function printMobileServiceSlip(id) {
+    const r = mobileServiceData[id];
+    if (!r) return;
+
+    let dateDisplay = r.serviceDate || '-';
+    if (r.serviceDate && r.serviceDate.includes('-')) {
+        const parts = r.serviceDate.split('-');
+        if (parts.length === 3) {
+            dateDisplay = parts[2] + '/' + parts[1] + '/' + (parseInt(parts[0]) + 543);
+        }
+    }
+
+    const printDateTh = todayTh();
+    const printTime = getCurrentTime();
+
+    const isReady = r.status === 'ready';
+    const statusText = isReady ? 'จัดของเรียบร้อยแล้ว (พร้อมให้ช่างมารับ)' : 'ยังไม่จัดของ (รอจัดของ)';
+
+    let printHTML = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>ใบจัดของ Mobile Service - ' + escapeHtml(r.licensePlate) + '</title>';
+    printHTML += '<style>';
+    printHTML += '@page { size: A5 landscape; margin: 10mm; }';
+    printHTML += 'body { font-family: "Prompt", Tahoma, sans-serif; color: #000; margin: 0; padding: 10px; font-size: 13px; line-height: 1.5; }';
+    printHTML += '.header { border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 14px; }';
+    printHTML += '.brand { font-size: 18px; font-weight: 800; color: #dc2626; }';
+    printHTML += '.title { font-size: 16px; font-weight: bold; margin-top: 2px; }';
+    printHTML += '.meta-card { border: 2px solid #333; border-radius: 8px; padding: 14px; margin-bottom: 14px; }';
+    printHTML += '.meta-table { width: 100%; border-collapse: collapse; }';
+    printHTML += '.meta-table td { padding: 6px 8px; font-size: 14px; }';
+    printHTML += '.plate-box { display: inline-block; border: 2px solid #000; padding: 6px 18px; font-size: 20px; font-weight: 800; border-radius: 6px; background: #fff; }';
+    printHTML += '.status-box { display: inline-block; padding: 4px 12px; border-radius: 4px; font-weight: bold; font-size: 14px; }';
+    printHTML += '.status-ready { background: #dcfce7; color: #166534; border: 1px solid #16a34a; }';
+    printHTML += '.status-pending { background: #fef3c7; color: #92400e; border: 1px solid #f59e0b; }';
+    printHTML += '.note-box { border: 1px dashed #666; border-radius: 6px; padding: 10px; margin-top: 10px; background: #fafafa; }';
+    printHTML += '.sign-table { width: 100%; margin-top: 30px; border-collapse: collapse; }';
+    printHTML += '.sign-box { border-top: 1px dashed #000; width: 80%; margin: 25px auto 4px auto; text-align: center; padding-top: 4px; font-size: 12px; }';
+    printHTML += '</style></head><body>';
+
+    printHTML += '<div class="header">';
+    printHTML += '<table style="width:100%;"><tr>';
+    printHTML += '<td>';
+    printHTML += '<div class="brand">ISUZU HUA CHIANG CHAN</div>';
+    printHTML += '<div class="title">ใบแจ้งจัดของ Mobile Service</div>';
+    printHTML += '<div style="font-size:12px;color:#555;">ศูนย์บริการอีซูซุฮั่วเชียงจั่น โทร. 081-6395800</div>';
+    printHTML += '</td>';
+    printHTML += '<td style="text-align:right;vertical-align:bottom;font-size:12px;">';
+    printHTML += 'วันที่พิมพ์: <strong>' + printDateTh + ' ' + printTime + '</strong><br>';
+    printHTML += 'รหัสรายการ: ' + r.id;
+    printHTML += '</td>';
+    printHTML += '</tr></table>';
+    printHTML += '</div>';
+
+    printHTML += '<div class="meta-card">';
+    printHTML += '<table class="meta-table">';
+    printHTML += '<tr>';
+    printHTML += '<td style="width:20%;font-weight:bold;">เลขทะเบียนรถ:</td>';
+    printHTML += '<td style="width:40%;"><div class="plate-box">' + escapeHtml(r.licensePlate) + '</div></td>';
+    printHTML += '<td style="width:18%;font-weight:bold;">สถานะการจัดของ:</td>';
+    printHTML += '<td style="width:22%;"><div class="status-box ' + (isReady ? 'status-ready' : 'status-pending') + '">' + statusText + '</div></td>';
+    printHTML += '</tr>';
+    printHTML += '<tr>';
+    printHTML += '<td style="font-weight:bold;">ช่างที่จะเอาของไป:</td>';
+    printHTML += '<td style="font-size:16px;"><strong>' + escapeHtml(r.technician || '-') + '</strong></td>';
+    printHTML += '<td style="font-weight:bold;">วัน/เวลานัดหมาย:</td>';
+    printHTML += '<td>' + dateDisplay + (r.serviceTime ? ' (' + r.serviceTime + ' น.)' : '') + '</td>';
+    printHTML += '</tr>';
+    if (r.note) {
+        printHTML += '<tr>';
+        printHTML += '<td style="font-weight:bold;vertical-align:top;">หมายเหตุ:</td>';
+        printHTML += '<td colspan="3"><div class="note-box">' + escapeHtml(r.note) + '</div></td>';
+        printHTML += '</tr>';
+    }
+    printHTML += '</table>';
+    printHTML += '</div>';
+
+    printHTML += '<table class="sign-table">';
+    printHTML += '<tr>';
+    printHTML += '<td style="width:50%;text-align:center;">';
+    printHTML += '<div class="sign-box">ลงชื่อ........................................................ ผู้จัดเตรียมของ<br>วันที่ ......./......./........... เวลา .........:......... น.</div>';
+    printHTML += '</td>';
+    printHTML += '<td style="width:50%;text-align:center;">';
+    printHTML += '<div class="sign-box">ลงชื่อ........................................................ ช่างผู้รับของ<br>( ' + escapeHtml(r.technician || '........................................................') + ' )<br>วันที่ ......./......./........... เวลา .........:......... น.</div>';
+    printHTML += '</td>';
+    printHTML += '</tr>';
+    printHTML += '</table>';
+
+    printHTML += '</body></html>';
+
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow.document;
+    doc.open();
+    doc.write(printHTML);
+    doc.close();
+
+    setTimeout(function () {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+        setTimeout(function () {
+            document.body.removeChild(iframe);
+        }, 1500);
+    }, 500);
 }
 
 function loadAlerts() {
@@ -519,10 +1383,7 @@ function loadAlerts() {
                 group.date + ' ' + group.time +
                 (group.licensePlate ? ' <span class="ms-2"><i class="fa-solid fa-car me-1"></i>' + escapeHtml(group.licensePlate) + '</span>' : '') +
                 '</div>' +
-                (group.note ? '<div class="alert-note">' +
-                '<i class="fa-solid fa-note-sticky me-1"></i>' +
-                escapeHtml(group.note) +
-                '</div>' : '') +
+                (group.note ? '<div class="alert-note mt-2">' + formatBatchNoteBannerHtml(group.note) + '</div>' : '') +
                 '</div>' +
                 '<div class="alert-header-summary">' +
                 group.items.length + ' รายการ (' + totalQty + ' ชิ้น)' +
@@ -553,7 +1414,7 @@ function loadAlerts() {
                     '<td class="alert-part-no">' + escapeHtml(item.partNo) + '</td>' +
                     '<td class="alert-part-name">' + escapeHtml(item.partName || '-') + '</td>' +
                     '<td class="text-center alert-qty">' + item.qty + '</td>' +
-                    '<td class="text-muted small">' + escapeHtml(item.itemNote || '-') + '</td>' +
+                    '<td>' + formatItemNoteHtml(item.itemNote) + '</td>' +
                     '<td class="text-center">' +
                     '<button class="btn btn-sm btn-success alert-action-btn" data-confirm-batch="' + item.batchId + '" data-person="' + group.personId + '">' +
                     '<i class="fa-solid fa-check me-1"></i> รับแล้ว' +
@@ -579,6 +1440,7 @@ function confirmReceivedBatch(batchId, personId) {
         const filtered = list.filter(function (x) { return x.batchId !== batchId; });
         database.ref('orders/' + personId).set(filtered).then(function () {
             loadAlerts();
+            showGrowl('รับของและลบรายการแจ้งเตือนแล้ว', 'success');
         }).catch(function (error) {
             console.error('Error deleting batch:', error);
             alert('เกิดข้อผิดพลาดในการลบรายการ: ' + error.message);
@@ -731,6 +1593,7 @@ function addNote() {
         document.getElementById('note-input').value = '';
         document.getElementById('note-alert-date').value = '';
         document.getElementById('note-alert-time').value = '';
+        showGrowl('บันทึกโน๊ตเรียบร้อยแล้ว', 'success');
     }).catch(function (error) {
         console.error('Error adding note:', error);
         alert('เกิดข้อผิดพลาดในการเพิ่มโน๊ต: ' + error.message);
@@ -741,7 +1604,7 @@ function deleteNote(noteId) {
     if (!confirm('ลบโน๊ตนี้หรือไม่?')) return;
 
     database.ref('notes/' + noteId).remove().then(function () {
-        // Note removed successfully
+        showGrowl('ลบโน๊ตเรียบร้อยแล้ว', 'info');
     }).catch(function (error) {
         console.error('Error deleting note:', error);
         alert('เกิดข้อผิดพลาดในการลบโน๊ต: ' + error.message);
@@ -776,7 +1639,9 @@ function editNote(noteId) {
                 }
             }
 
-            database.ref('notes/' + noteId).update(updateData).catch(function (error) {
+            database.ref('notes/' + noteId).update(updateData).then(function () {
+                showGrowl('แก้ไขโน๊ตเรียบร้อยแล้ว', 'success');
+            }).catch(function (error) {
                 console.error('Error updating note:', error);
                 alert('เกิดข้อผิดพลาดในการแก้ไขโน๊ต: ' + error.message);
             });
@@ -784,6 +1649,111 @@ function editNote(noteId) {
     }).catch(function (error) {
         console.error('Error loading note:', error);
     });
+}
+
+// Helper functions for Note Quick Select & Focus Display
+function getPersonNotifyNote(personId) {
+    if (!personId || !PEOPLE[personId]) return 'ของมาแจ้งที่ช่าง';
+    if (personId === 'customer') return 'ของมาโทรแจ้งลูกค้า';
+    const fullName = PEOPLE[personId].name || '';
+    const shortName = fullName.replace(/^พี่/, '');
+    return 'ของมาแจ้งที่' + shortName;
+}
+
+function updateOrderNoteChips(personId) {
+    const noteText = getPersonNotifyNote(personId);
+    document.querySelectorAll('.btn-note-chip-person').forEach(function (btn) {
+        btn.dataset.val = noteText;
+        const span = btn.querySelector('.chip-person-text');
+        if (span) span.textContent = noteText;
+    });
+    syncNoteChipsActiveState();
+}
+
+function syncNoteChipsActiveState() {
+    document.querySelectorAll('.btn-note-chip').forEach(function (btn) {
+        const targetId = btn.dataset.target;
+        const val = btn.dataset.val;
+        if (!targetId || !val) return;
+        const input = document.getElementById(targetId);
+        if (!input) return;
+        const currentVal = input.value.trim();
+        const isActive = (currentVal === val) || currentVal.includes(val);
+        btn.classList.toggle('active', isActive);
+    });
+}
+
+function formatItemNoteHtml(note) {
+    if (!note) return '<span class="text-muted small">-</span>';
+    const text = String(note).trim();
+    if (!text) return '<span class="text-muted small">-</span>';
+    
+    let extraClass = '';
+    let icon = '<i class="fa-solid fa-note-sticky text-warning me-1"></i>';
+    if (text.includes('โทร') || text.includes('ลูกค้า')) {
+        extraClass = ' item-note-notify-customer';
+        icon = '<i class="fa-solid fa-phone-volume text-success me-1"></i>';
+    } else if (text.includes('แจ้ง')) {
+        extraClass = ' item-note-notify-person';
+        icon = '<i class="fa-solid fa-bell text-primary me-1"></i>';
+    }
+    return '<span class="item-note-text' + extraClass + '">' + icon + escapeHtml(text) + '</span>';
+}
+
+function formatBatchNoteBannerHtml(note) {
+    if (!note) return '';
+    const text = String(note).trim();
+    if (!text) return '';
+    
+    const isCustomer = text.includes('โทร') || text.includes('ลูกค้า');
+    const isNotify = text.includes('แจ้ง');
+    const bannerClass = isCustomer ? 'note-focus-customer' : (isNotify ? 'note-focus-notify' : 'note-focus-general');
+    const badgeIcon = isCustomer ? 'fa-phone-volume' : (isNotify ? 'fa-bell fa-shake' : 'fa-note-sticky');
+    const badgeLabel = isCustomer ? 'แจ้งด่วน (ลูกค้า)' : (isNotify ? 'แจ้งพนักงาน' : 'หมายเหตุคำสั่ง');
+    
+    return '<div class="order-group-note-banner ' + bannerClass + '">' +
+        '<span class="note-focus-badge"><i class="fa-solid ' + badgeIcon + ' me-1"></i>' + badgeLabel + '</span>' +
+        '<span class="note-focus-content">' + escapeHtml(text) + '</span>' +
+        '</div>';
+}
+
+function initOrderNoteChips() {
+    document.addEventListener('click', function (e) {
+        const chip = e.target.closest('.btn-note-chip');
+        if (!chip) return;
+        
+        const targetId = chip.dataset.target;
+        const noteVal = chip.dataset.val;
+        if (!targetId || !noteVal) return;
+        
+        const input = document.getElementById(targetId);
+        if (!input) return;
+        
+        const current = input.value.trim();
+        if (!current) {
+            input.value = noteVal;
+        } else if (current === noteVal) {
+            // Toggle off when clicked again
+            input.value = '';
+        } else if (current.includes(noteVal)) {
+            // Remove existing occurrence
+            input.value = current.replace(noteVal, '').replace(/\s*\|\s*/g, ' | ').replace(/^\|\s*|\s*\|$/g, '').trim();
+        } else {
+            // Append with separator
+            input.value = current + ' | ' + noteVal;
+        }
+        
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        syncNoteChipsActiveState();
+        input.focus();
+    });
+
+    const noteInput = document.getElementById('note');
+    if (noteInput) {
+        noteInput.addEventListener('input', syncNoteChipsActiveState);
+    }
+
+    updateOrderNoteChips(currentPerson || 'tey');
 }
 
 function renderTable() {
@@ -834,26 +1804,42 @@ function renderTable() {
         const expectedDate = getExpectedDeliveryDate(group.date, group.type);
         const isUrgent = group.type === 'urgent';
 
+        // Calculate due status
+        const today = todayTh();
+        const current = parseDateTh(today);
+        const expected = parseDateTh(expectedDate);
+        const isDue = !allReceived && (current >= expected);
+        let diffDays = 0;
+        if (isDue) {
+            const diffTime = current.getTime() - expected.getTime();
+            diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+        }
+
         // Create group box container
         const groupBox = document.createElement('div');
-        groupBox.className = 'order-group-card ' + (isUrgent ? 'border-urgent' : 'border-normal') + (allReceived ? ' all-received' : '');
+        groupBox.className = 'order-group-card ' + (isUrgent ? 'border-urgent' : 'border-normal') + (allReceived ? ' all-received' : '') + (isDue ? ' is-due' : '');
 
         // Group header
         const header = document.createElement('div');
         header.className = 'order-group-header';
         header.innerHTML =
-            '<div class="order-group-header-top">' +
+            '<div class="order-group-header-top' + (isDue ? ' is-due' : '') + '">' +
                 '<div class="order-group-title-area">' +
                     '<div class="order-group-title">' +
                         '<i class="fa-solid fa-calendar-days text-primary"></i>' +
                         '<span class="order-date-text">' + group.date + '</span>' +
                         '<span class="order-time-text"><i class="fa-regular fa-clock me-1"></i>' + group.time + '</span>' +
+                        (isDue
+                            ? '<span class="order-group-due-badge-large"><i class="fa-solid fa-triangle-exclamation me-1"></i>ครบกำหนดแล้ว' +
+                              (diffDays > 0 ? ' <small class="due-days-pill">เลย ' + diffDays + ' วัน</small>' : '') +
+                              '</span>'
+                            : '') +
                     '</div>' +
                     '<div class="order-group-tags">' +
                         (isUrgent
                             ? '<span class="order-tag-urgent"><i class="fa-solid fa-bolt me-1"></i>สั่งด่วน</span>'
                             : '<span class="order-tag-normal"><i class="fa-solid fa-truck me-1"></i>สั่งปกติ</span>') +
-                        '<span class="order-tag-expected" title="วันที่คาดว่าจะได้รับของ"><i class="fa-solid fa-calendar-check me-1"></i>กำหนดส่ง: ' + expectedDate + '</span>' +
+                        '<span class="order-tag-expected' + (isDue ? ' tag-expected-due' : '') + '" title="วันที่คาดว่าจะได้รับของ"><i class="fa-solid fa-calendar-check me-1"></i>กำหนดส่ง: ' + expectedDate + '</span>' +
                         (group.licensePlate
                             ? '<span class="order-tag-plate"><i class="fa-solid fa-car-side me-1"></i>' + escapeHtml(group.licensePlate) + '</span>'
                             : '') +
@@ -884,7 +1870,7 @@ function renderTable() {
                     '</div>' +
                 '</div>' +
             '</div>' +
-            (group.note ? '<div class="order-group-note-banner"><i class="fa-solid fa-comment-dots text-primary me-2"></i><span class="note-label">หมายเหตุชุด:</span> ' + escapeHtml(group.note) + '</div>' : '');
+            formatBatchNoteBannerHtml(group.note);
 
         groupBox.appendChild(header);
 
@@ -938,7 +1924,7 @@ function renderTable() {
                     '<td><span class="part-no-pill">' + escapeHtml(item.partNo) + '</span></td>' +
                     '<td class="fw-medium text-dark">' + escapeHtml(item.partName || '-') + '</td>' +
                     '<td class="text-center"><span class="qty-pill">' + item.qty + '</span></td>' +
-                    '<td>' + (item.itemNote ? '<span class="item-note-text"><i class="fa-solid fa-tag me-1 text-muted"></i>' + escapeHtml(item.itemNote) + '</span>' : '<span class="text-muted small">-</span>') + '</td>' +
+                    '<td>' + formatItemNoteHtml(item.itemNote) + '</td>' +
                     '<td class="text-center">' + statusBadge + '</td>' +
                     '<td class="text-center">' +
                     '<div class="btn-group-row-actions">' +
@@ -1152,9 +2138,16 @@ function printBatch(batchId) {
     }, 1000);
 }
 
+const mainTabOrders = document.getElementById('main-tab-orders');
+if (mainTabOrders) {
+    mainTabOrders.addEventListener('click', function () {
+        openPerson(lastSelectedPerson || 'tey');
+    });
+}
+
 document.querySelectorAll('.tab-btn[data-tab]').forEach(function (tab) {
     tab.addEventListener('click', function () {
-        if (typeof tab.scrollIntoView === 'function') {
+        if (typeof tab.scrollIntoView === 'function' && !tab.classList.contains('main-nav-btn')) {
             tab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
         }
         if (tab.dataset.tab === 'search-all') {
@@ -1169,6 +2162,10 @@ document.querySelectorAll('.tab-btn[data-tab]').forEach(function (tab) {
             showDueAlerts();
         } else if (tab.dataset.tab === 'calendar') {
             showCalendar();
+        } else if (tab.dataset.tab === 'mobile-service') {
+            showMobileService();
+        } else if (tab.dataset.tab === 'borrow') {
+            showBorrow();
         } else {
             openPerson(tab.dataset.tab);
         }
@@ -1317,6 +2314,7 @@ document.getElementById('btn-add-deposit-item').addEventListener('click', functi
     document.getElementById('deposit-part-grand-total').value = '';
 
     renderDepositItems();
+    showGrowl('เพิ่มอะไหล่ฝาก: ' + partNo + (partName ? ' (' + partName + ')' : ''), 'success');
 });
 
 document.getElementById('deposit-items-tbody').addEventListener('click', function (e) {
@@ -1325,6 +2323,7 @@ document.getElementById('deposit-items-tbody').addEventListener('click', functio
         const index = parseInt(removeBtn.dataset.removeDepositItem);
         depositItems.splice(index, 1);
         renderDepositItems();
+        showGrowl('ลบรายการอะไหล่ฝากออกจากตารางแล้ว', 'info');
     }
 });
 
@@ -1342,6 +2341,33 @@ document.getElementById('notes-container').addEventListener('click', function (e
 });
 
 function updatePersonTabs() {
+    const isOrderPerson = Boolean(PEOPLE[currentPerson]);
+    if (isOrderPerson) {
+        lastSelectedPerson = currentPerson;
+    }
+
+    // 1. Update Tier 1 Main Tab "สั่งอะไหล่" & Active Person Chip
+    const mainTabOrders = document.getElementById('main-tab-orders');
+    const personNameChip = document.getElementById('main-tab-person-name');
+    if (mainTabOrders) {
+        mainTabOrders.classList.toggle('active', isOrderPerson);
+    }
+    if (personNameChip) {
+        const activeName = (PEOPLE[lastSelectedPerson] && PEOPLE[lastSelectedPerson].name) || 'พี่เต้ย';
+        personNameChip.textContent = activeName;
+    }
+
+    // 2. Update Tier 2 visibility (visible only when in "สั่งอะไหล่" mode)
+    const tier2Subnav = document.getElementById('tier2-people-subnav');
+    if (tier2Subnav) {
+        if (isOrderPerson) {
+            tier2Subnav.classList.remove('hidden');
+        } else {
+            tier2Subnav.classList.add('hidden');
+        }
+    }
+
+    // 3. Update all tab buttons
     document.querySelectorAll('.tab-btn[data-tab]').forEach(function (tab) {
         let isActive = false;
         if (tab.dataset.tab === 'search-all') {
@@ -1356,11 +2382,15 @@ function updatePersonTabs() {
             isActive = (currentPerson === 'due-alerts');
         } else if (tab.dataset.tab === 'calendar') {
             isActive = (currentPerson === 'calendar');
+        } else if (tab.dataset.tab === 'mobile-service') {
+            isActive = (currentPerson === 'mobile-service');
+        } else if (tab.dataset.tab === 'borrow') {
+            isActive = (currentPerson === 'borrow');
         } else {
             isActive = (tab.dataset.tab === currentPerson);
         }
         tab.classList.toggle('active', isActive);
-        if (isActive && typeof tab.scrollIntoView === 'function') {
+        if (isActive && typeof tab.scrollIntoView === 'function' && !tab.classList.contains('main-nav-btn')) {
             tab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
         }
     });
@@ -1509,11 +2539,14 @@ function initApp() {
             openPerson('tey');
             checkDeadlineAlerts();
             checkNoteAlerts();
+            checkMobileServiceAlerts();
             setupNoteAlertsListeners();
+            setupMobileAlertsListeners();
             setupDueAlertsListeners();
             updateDueBadge();
             initNoteInteractions();
             initCalendarView();
+            initOrderNoteChips();
         });
     } else {
         console.log('DOM already ready, initializing app...');
@@ -1521,11 +2554,14 @@ function initApp() {
         openPerson('tey');
         checkDeadlineAlerts();
         checkNoteAlerts();
+        checkMobileServiceAlerts();
         setupNoteAlertsListeners();
+        setupMobileAlertsListeners();
         setupDueAlertsListeners();
         updateDueBadge();
         initNoteInteractions();
         initCalendarView();
+        initOrderNoteChips();
     }
 }
 
@@ -1536,6 +2572,9 @@ setInterval(checkNoteAlerts, 30000);
 
 // Check for deadline alerts every 30 seconds
 setInterval(checkDeadlineAlerts, 30000);
+
+// Check for mobile service alerts every 30 seconds
+setInterval(checkMobileServiceAlerts, 30000);
 
 function checkDeadlineAlerts() {
     database.ref('deposits').once('value').then(function (snapshot) {
@@ -1588,6 +2627,8 @@ function testDeadlineAlertUI() {
         console.error('Error loading deposits for test:', error);
     });
 }
+
+
 
 function updateDeadlineAlertsUI() {
     const toggleBtn = document.getElementById('btn-deadline-toggle');
@@ -1944,6 +2985,192 @@ function setupNoteAlertsListeners() {
     }
 }
 
+// ===================================================
+// Mobile Service Floating Alerts & Sidebar Logic
+// ===================================================
+function checkMobileServiceAlerts() {
+    updateMobileAlertsUI();
+}
+
+function updateMobileAlertsUI() {
+    var toggleBtn = document.getElementById('btn-mobile-alert-toggle');
+    var sidebar = document.getElementById('mobile-alerts');
+    var list = document.getElementById('mobile-alerts-list');
+    var badge = document.getElementById('mobile-alert-badge');
+
+    if (!toggleBtn || !sidebar || !list || !badge) return;
+
+    list.innerHTML = '';
+
+    var records = Object.values(mobileServiceData || {});
+    var todayStr = getTodayIsoString();
+
+    // Alerts for all pending jobs (waiting for parts to be packed)
+    var alerts = records.filter(function (r) {
+        return r.status !== 'ready';
+    });
+
+    // Sort:
+    // 1. Overdue pending items first (serviceDate < todayStr)
+    // 2. Due today pending items (serviceDate === todayStr)
+    // 3. No serviceDate items (pending immediately)
+    // 4. Future serviceDate items
+    alerts.sort(function (a, b) {
+        var isOverdueA = a.serviceDate && a.serviceDate < todayStr;
+        var isOverdueB = b.serviceDate && b.serviceDate < todayStr;
+        if (isOverdueA && !isOverdueB) return -1;
+        if (!isOverdueA && isOverdueB) return 1;
+
+        var isTodayA = a.serviceDate && a.serviceDate === todayStr;
+        var isTodayB = b.serviceDate && b.serviceDate === todayStr;
+        if (isTodayA && !isTodayB) return -1;
+        if (!isTodayA && isTodayB) return 1;
+
+        var hasDateA = !!a.serviceDate;
+        var hasDateB = !!b.serviceDate;
+        if (!hasDateA && hasDateB) return -1;
+        if (hasDateA && !hasDateB) return 1;
+
+        return (a.serviceDate || '').localeCompare(b.serviceDate || '');
+    });
+
+    mobileAlerts = alerts;
+
+    if (alerts.length === 0) {
+        toggleBtn.classList.add('hidden');
+        sidebar.classList.add('hidden');
+        return;
+    }
+
+    toggleBtn.classList.remove('hidden');
+    badge.textContent = alerts.length;
+
+    // Check if any is overdue or due today to apply urgent pulse
+    var hasUrgent = alerts.some(function (r) {
+        return r.serviceDate && r.serviceDate <= todayStr;
+    });
+
+    if (hasUrgent) {
+        toggleBtn.classList.add('has-urgent');
+        toggleBtn.title = 'แจ้งเตือน Mobile Service: มีงานครบกำหนด/เลยกำหนด!';
+    } else {
+        toggleBtn.classList.remove('has-urgent');
+        toggleBtn.title = 'แจ้งเตือน Mobile Service: มี ' + alerts.length + ' รายการรอจัดของ';
+    }
+
+    alerts.forEach(function (item) {
+        var alertItem = document.createElement('div');
+        var isOverdue = item.serviceDate && item.serviceDate < todayStr;
+        var isToday = item.serviceDate && item.serviceDate === todayStr;
+
+        alertItem.className = 'mobile-alert-item' + (isOverdue ? ' is-overdue' : (isToday ? ' is-today' : ''));
+
+        // Calculate days overdue if applicable
+        var statusBadgeHtml = '';
+        if (isOverdue) {
+            var diffDays = Math.ceil((new Date(todayStr) - new Date(item.serviceDate)) / (1000 * 60 * 60 * 24));
+            if (isNaN(diffDays) || diffDays <= 0) diffDays = 1;
+            statusBadgeHtml = '<span class="badge bg-danger text-white"><i class="fa-solid fa-triangle-exclamation me-1"></i>เลยกำหนด ' + diffDays + ' วัน</span>';
+        } else if (isToday) {
+            statusBadgeHtml = '<span class="badge bg-warning text-dark fw-bold"><i class="fa-solid fa-clock me-1"></i>ครบกำหนดวันนี้!</span>';
+        } else if (item.serviceDate) {
+            var dateDisplay = item.serviceDate;
+            if (item.serviceDate.includes('-')) {
+                var p = item.serviceDate.split('-');
+                if (p.length === 3) dateDisplay = p[2] + '/' + p[1] + '/' + (parseInt(p[0]) + 543);
+            }
+            statusBadgeHtml = '<span class="badge bg-info text-white"><i class="fa-solid fa-calendar me-1"></i>นัด: ' + dateDisplay + '</span>';
+        } else {
+            statusBadgeHtml = '<span class="badge bg-secondary text-white"><i class="fa-solid fa-hourglass-half me-1"></i>รอจัดของ</span>';
+        }
+
+        alertItem.innerHTML =
+            '<div class="mobile-alert-plate">' +
+                '<span><i class="fa-solid fa-truck-fast me-2"></i>' + escapeHtml(item.licensePlate) + '</span>' +
+                statusBadgeHtml +
+            '</div>' +
+            (item.technician && item.technician !== '-' ?
+                '<div class="mobile-alert-tech">' +
+                    '<i class="fa-solid fa-wrench me-1 text-primary"></i>ช่าง: <span class="fw-bold text-dark">' + escapeHtml(item.technician) + '</span>' +
+                '</div>' : '') +
+            (item.note ?
+                '<div class="mobile-alert-note">' +
+                    '<i class="fa-solid fa-note-sticky me-1 text-muted"></i>' + escapeHtml(item.note) +
+                '</div>' : '') +
+            '<div class="mobile-alert-date">' +
+                '<i class="fa-regular fa-clock me-1"></i>บันทึกเมื่อ: ' + (item.createdAt || '-') + ' ' + (item.createdTime || '') +
+            '</div>' +
+            '<div class="mobile-alert-actions">' +
+                '<button type="button" class="btn btn-success btn-sm fw-bold" data-mobile-ready="' + item.id + '" title="ทำเครื่องหมายว่าจัดของเสร็จแล้ว">' +
+                    '<i class="fa-solid fa-check me-1"></i>จัดของแล้ว' +
+                '</button>' +
+                '<button type="button" class="btn btn-outline-primary btn-sm" data-mobile-goto="' + item.id + '" title="เปิดแท็บ Mobile Service เพื่อดูรายละเอียด">' +
+                    '<i class="fa-solid fa-arrow-right me-1"></i>ดูงาน' +
+                '</button>' +
+            '</div>';
+
+        list.appendChild(alertItem);
+    });
+
+    // Add event listeners for action buttons
+    list.querySelectorAll('[data-mobile-ready]').forEach(function (btn) {
+        btn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            var id = btn.dataset.mobileReady;
+            if (id) {
+                quickToggleMobileStatus(id, 'ready');
+            }
+        });
+    });
+
+    list.querySelectorAll('[data-mobile-goto]').forEach(function (btn) {
+        btn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            var id = btn.dataset.mobileGoto;
+            sidebar.classList.add('hidden');
+            showMobileService();
+            setTimeout(function () {
+                var card = document.getElementById('ms-card-' + id);
+                if (card) {
+                    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    card.classList.add('ms-card-highlight');
+                    setTimeout(function () {
+                        card.classList.remove('ms-card-highlight');
+                    }, 2500);
+                }
+            }, 200);
+        });
+    });
+}
+
+function setupMobileAlertsListeners() {
+    var toggleBtn = document.getElementById('btn-mobile-alert-toggle');
+    var closeBtn = document.getElementById('btn-close-mobile-alerts');
+    var sidebar = document.getElementById('mobile-alerts');
+
+    if (toggleBtn) {
+        toggleBtn.addEventListener('click', function () {
+            if (sidebar) {
+                sidebar.classList.toggle('hidden');
+                if (!sidebar.classList.contains('hidden')) {
+                    var noteSidebar = document.getElementById('note-alerts');
+                    var deadlineSidebar = document.getElementById('deadline-alerts');
+                    if (noteSidebar) noteSidebar.classList.add('hidden');
+                    if (deadlineSidebar) deadlineSidebar.classList.add('hidden');
+                }
+            }
+        });
+    }
+
+    if (closeBtn) {
+        closeBtn.addEventListener('click', function () {
+            if (sidebar) {
+                sidebar.classList.add('hidden');
+            }
+        });
+    }
+}
+
 // Deposit Functions
 function addDeposit() {
     const customer = document.getElementById('deposit-customer').value.trim();
@@ -2267,7 +3494,7 @@ function deleteDeposit(depositId) {
     if (!confirm('ลบรายการมัดจำนี้หรือไม่?')) return;
 
     database.ref('deposits/' + depositId).remove().then(function () {
-        // Deposit removed successfully
+        showGrowl('ลบรายการมัดจำเรียบร้อยแล้ว', 'info');
     }).catch(function (error) {
         console.error('Error deleting deposit:', error);
         alert('เกิดข้อผิดพลาดในการลบรายการมัดจำ: ' + error.message);
@@ -2792,7 +4019,7 @@ function renderTempItems() {
             '<td class="fw-bold text-primary">' + escapeHtml(item.partNo) + '</td>' +
             '<td>' + escapeHtml(item.partName || '-') + '</td>' +
             '<td class="text-center fw-bold">' + item.qty + '</td>' +
-            '<td class="text-muted small">' + escapeHtml(item.itemNote || '-') + '</td>' +
+            '<td>' + formatItemNoteHtml(item.itemNote) + '</td>' +
             '<td class="text-center">' +
             '<button class="btn btn-outline-secondary btn-action me-1" data-edit-temp="' + index + '" title="แก้ไข"><i class="fa-solid fa-pen"></i></button>' +
             '<button class="btn btn-outline-danger btn-action" data-remove-temp="' + index + '" title="ลบ"><i class="fa-solid fa-trash"></i></button>' +
@@ -2841,11 +4068,21 @@ document.getElementById('btn-add-item').addEventListener('click', function () {
         box.textContent = '';
         box.classList.remove('filled', 'active');
     });
-    boxes[0].classList.add('active');
+    if (boxes.length > 0) {
+        boxes[0].classList.add('active');
+    }
+    const pinContainer = document.getElementById('temp-pin-boxes');
+    if (pinContainer) pinContainer.classList.remove('pin-complete');
+    const statusBadge = document.getElementById('pin-status-badge');
+    if (statusBadge) {
+        statusBadge.className = 'badge pin-status-pill';
+        statusBadge.innerHTML = '<i class="fa-solid fa-keyboard me-1"></i> 0 / 10 หลัก';
+    }
 
     document.getElementById('temp-part-no-hidden').focus();
 
     renderTempItems();
+    showGrowl('เพิ่มอะไหล่: ' + partNo + (partName ? ' (' + partName + ')' : ''), 'success');
 });
 
 document.getElementById('temp-items-tbody').addEventListener('click', function (e) {
@@ -2856,6 +4093,7 @@ document.getElementById('temp-items-tbody').addEventListener('click', function (
         const index = parseInt(removeBtn.dataset.removeTemp);
         tempItems.splice(index, 1);
         renderTempItems();
+        showGrowl('ลบรายการอะไหล่ออกจากตารางแล้ว', 'info');
     }
 
     if (editBtn) {
@@ -2883,6 +4121,22 @@ document.getElementById('temp-items-tbody').addEventListener('click', function (
                 });
                 if (item.partNo.length < 10) {
                     boxes[item.partNo.length].classList.add('active');
+                }
+            }
+
+            const pinContainer = document.getElementById('temp-pin-boxes');
+            const statusBadge = document.getElementById('pin-status-badge');
+            if (item.partNo.length === 10) {
+                if (pinContainer) pinContainer.classList.add('pin-complete');
+                if (statusBadge) {
+                    statusBadge.className = 'badge pin-status-pill is-complete';
+                    statusBadge.innerHTML = '<i class="fa-solid fa-circle-check me-1"></i> ครบ 10 หลักแล้ว';
+                }
+            } else {
+                if (pinContainer) pinContainer.classList.remove('pin-complete');
+                if (statusBadge) {
+                    statusBadge.className = 'badge pin-status-pill';
+                    statusBadge.innerHTML = '<i class="fa-solid fa-keyboard me-1"></i> ' + item.partNo.length + ' / 10 หลัก';
                 }
             }
 
@@ -2992,7 +4246,9 @@ document.getElementById('btn-save').addEventListener('click', function () {
             });
         });
 
+        const savedCount = tempItems.length;
         setOrders(list);
+        showGrowl('บันทึกการสั่งอะไหล่เรียบร้อยแล้ว (' + savedCount + ' รายการ)', 'success');
 
         // Reset form fields manually since it's a div, not a form
         document.getElementById('edit-id').value = '';
@@ -3105,6 +4361,7 @@ function saveInlineItem(itemId) {
     editingItemId = null;
     setOrders(list);
     renderTable();
+    showGrowl('บันทึกการแก้ไขรายการอะไหล่เรียบร้อย: ' + newPartNo, 'success');
 }
 
 document.getElementById('order-list-container').addEventListener('click', function (e) {
@@ -3135,6 +4392,7 @@ document.getElementById('order-list-container').addEventListener('click', functi
         const batchId = deleteBatchBtn.dataset.deleteBatch;
         setOrders(getOrders().filter(function (x) { return x.batchId !== batchId; }));
         renderTable();
+        showGrowl('ลบกลุ่มรายการสั่งอะไหล่เรียบร้อยแล้ว', 'info');
         return;
     }
 
@@ -3197,6 +4455,7 @@ document.getElementById('order-list-container').addEventListener('click', functi
         item.received = !item.received;
         setOrders(list);
         renderTable();
+        showGrowl(item.received ? 'รับของแล้ว: ' + item.partNo : 'ยกเลิกสถานะรับของ: ' + item.partNo, item.received ? 'success' : 'info');
         return;
     }
 
@@ -3212,6 +4471,7 @@ document.getElementById('order-list-container').addEventListener('click', functi
         item.itemNote = newNote.trim();
         setOrders(list);
         renderTable();
+        showGrowl('อัปเดตหมายเหตุอะไหล่เรียบร้อย: ' + item.partNo, 'success');
         return;
     }
 
@@ -3222,8 +4482,11 @@ document.getElementById('order-list-container').addEventListener('click', functi
     }
     if (delBtn) {
         if (!confirm('ลบรายการนี้หรือไม่?')) return;
+        const targetItem = getOrders().find(function (x) { return x.id === delBtn.dataset.del; });
+        const partInfo = targetItem ? ' (' + targetItem.partNo + ')' : '';
         setOrders(getOrders().filter(function (x) { return x.id !== delBtn.dataset.del; }));
         renderTable();
+        showGrowl('ลบรายการอะไหล่เรียบร้อยแล้ว' + partInfo, 'info');
     }
 });
 
@@ -3314,14 +4577,14 @@ function renderSearchAll() {
                     '<td class="text-center fw-bold">' + item.qty + '</td>' +
                     '<td>' + item.date + '</td>' +
                     '<td class="' + (item.type === 'urgent' ? 'order-type-urgent' : 'order-type-normal') + '">' + (item.type === 'urgent' ? 'สั่งด่วน' : 'สั่งปกติ') + '</td>' +
-                    '<td class="text-muted small">' + escapeHtml(item.note || '-') + '</td>';
+                    '<td>' + formatItemNoteHtml(item.itemNote || item.note) + '</td>';
             } else {
                 tr.innerHTML =
                     '<td>' + escapeHtml(item.personName) + '</td>' +
                     '<td class="text-center fw-bold">' + item.qty + '</td>' +
                     '<td>' + item.date + '</td>' +
                     '<td class="' + (item.type === 'urgent' ? 'order-type-urgent' : 'order-type-normal') + '">' + (item.type === 'urgent' ? 'สั่งด่วน' : 'สั่งปกติ') + '</td>' +
-                    '<td class="text-muted small">' + escapeHtml(item.note || '-') + '</td>';
+                    '<td>' + formatItemNoteHtml(item.itemNote || item.note) + '</td>';
             }
             tbody.appendChild(tr);
         });
@@ -3405,45 +4668,14 @@ document.getElementById('btn-save-quick-add').addEventListener('click', function
 
     // Refresh table
     renderTable();
+    showGrowl('เพิ่มอะไหล่ด่วนสำเร็จ: ' + partNo + (partName ? ' (' + partName + ')' : ''), 'success');
 });
 
 // Check for items that should have been delivered
 function checkDeliveries() {
-    const all = loadAll();
-    const today = todayTh();
-    const pendingItems = [];
-
-    Object.keys(all).forEach(function (personId) {
-        all[personId].forEach(function (item) {
-            if (!item.received) {
-                const expectedDate = getExpectedDeliveryDate(item.date, item.type);
-                const expected = parseDateTh(expectedDate);
-                const current = parseDateTh(today);
-
-                if (current >= expected) {
-                    pendingItems.push({
-                        person: PEOPLE[personId].name,
-                        partNo: item.partNo,
-                        partName: item.partName,
-                        expectedDate: expectedDate,
-                        isOverdue: current > expected
-                    });
-                }
-            }
-        });
-    });
-
-    if (pendingItems.length > 0) {
-        let message = 'มีของที่ควรมาส่งแล้ว ' + pendingItems.length + ' รายการ:\n\n';
-        pendingItems.forEach(function (item, i) {
-            message += (i + 1) + '. ' + item.person + ' - ' + item.partNo;
-            if (item.partName) message += ' (' + item.partName + ')';
-            message += ' - ควรมาส่ง ' + item.expectedDate;
-            if (item.isOverdue) message += ' (เกินกำหนดแล้ว!)';
-            message += '\n';
-        });
-        alert(message);
-    }
+    // Delivery overdue items are tracked via the badge count, due-alerts tab, and sidebar
+    // Pop-up alert has been disabled as requested to prevent filling up the screen
+    return;
 }
 
 // ===================================================
@@ -3453,36 +4685,75 @@ let dueAlertsFilterPerson = 'all';
 let dueAlertsSearchQuery = '';
 
 function updateDueBadge(count) {
-    const badge = document.getElementById('badge-due-count');
-    if (!badge) return;
+    const all = loadAll() || {};
+    const today = todayTh();
+    const current = parseDateTh(today);
 
-    let dueCount = 0;
-    if (typeof count === 'number') {
-        dueCount = count;
-    } else {
-        const all = loadAll();
-        const today = todayTh();
-        const current = parseDateTh(today);
-        Object.keys(all).forEach(function (pid) {
-            if (!all[pid] || !Array.isArray(all[pid])) return;
-            all[pid].forEach(function (item) {
-                if (!item.received) {
-                    const expectedDate = getExpectedDeliveryDate(item.date, item.type);
-                    const expected = parseDateTh(expectedDate);
-                    if (current >= expected) {
-                        dueCount++;
-                    }
-                }
-            });
+    // Track due count per person
+    const personDueCounts = {};
+    if (typeof PEOPLE === 'object' && PEOPLE !== null) {
+        Object.keys(PEOPLE).forEach(function (pid) {
+            personDueCounts[pid] = 0;
         });
     }
 
-    if (dueCount > 0) {
-        badge.textContent = dueCount;
-        badge.classList.remove('hidden');
-    } else {
-        badge.classList.add('hidden');
+    let calculatedTotal = 0;
+    Object.keys(all).forEach(function (pid) {
+        if (!all[pid] || !Array.isArray(all[pid])) return;
+        if (personDueCounts[pid] === undefined) {
+            personDueCounts[pid] = 0;
+        }
+        all[pid].forEach(function (item) {
+            if (!item.received) {
+                const expectedDate = getExpectedDeliveryDate(item.date, item.type);
+                const expected = parseDateTh(expectedDate);
+                if (current >= expected) {
+                    calculatedTotal++;
+                    personDueCounts[pid]++;
+                }
+            }
+        });
+    });
+
+    const finalTotal = typeof count === 'number' ? count : calculatedTotal;
+
+    // 1. Update Global Due Alerts Tab Badge
+    const badge = document.getElementById('badge-due-count');
+    if (badge) {
+        if (finalTotal > 0) {
+            badge.textContent = finalTotal;
+            badge.classList.remove('hidden');
+        } else {
+            badge.textContent = '0';
+            badge.classList.add('hidden');
+        }
     }
+
+    // 2. Update Main Orders Tab Badge if present
+    const ordersBadge = document.getElementById('badge-orders-due');
+    if (ordersBadge) {
+        if (finalTotal > 0) {
+            ordersBadge.textContent = finalTotal;
+            ordersBadge.classList.remove('hidden');
+        } else {
+            ordersBadge.textContent = '0';
+            ordersBadge.classList.add('hidden');
+        }
+    }
+
+    // 3. Update Each Person's Due Badge
+    Object.keys(personDueCounts).forEach(function (pid) {
+        const pBadge = document.getElementById('badge-due-' + pid);
+        if (!pBadge) return;
+        const pCount = personDueCounts[pid] || 0;
+        if (pCount > 0) {
+            pBadge.textContent = pCount;
+            pBadge.classList.remove('hidden');
+        } else {
+            pBadge.textContent = '0';
+            pBadge.classList.add('hidden');
+        }
+    });
 }
 
 function loadDueAlerts() {
@@ -3656,8 +4927,8 @@ function loadDueAlerts() {
 
         if (group.note) {
             const noteDiv = document.createElement('div');
-            noteDiv.className = 'px-3 py-2 bg-light border-bottom small text-muted';
-            noteDiv.innerHTML = '<i class="fa-solid fa-note-sticky me-1 text-warning"></i>หมายเหตุการสั่ง: ' + escapeHtml(group.note);
+            noteDiv.className = 'px-3 pb-2 pt-1';
+            noteDiv.innerHTML = formatBatchNoteBannerHtml(group.note);
             groupCard.appendChild(noteDiv);
         }
 
@@ -3685,7 +4956,7 @@ function loadDueAlerts() {
                 '<td class="fw-bold text-primary">' + escapeHtml(item.partNo) + '</td>' +
                 '<td>' + escapeHtml(item.partName || '-') + '</td>' +
                 '<td class="text-center fw-bold">' + item.qty + '</td>' +
-                '<td class="text-muted small">' + escapeHtml(item.itemNote || '-') + '</td>' +
+                '<td>' + formatItemNoteHtml(item.itemNote) + '</td>' +
                 '<td class="text-center">' +
                 '<button type="button" class="btn btn-sm btn-outline-success" data-receive-due-item="' + item.id + '" data-person="' + group.personId + '" title="ทำเครื่องหมายว่ารับของชิ้นนี้แล้ว">' +
                 '<i class="fa-solid fa-check me-1"></i>รับของแล้ว' +
@@ -3733,6 +5004,7 @@ function markBatchReceivedInDue(batchId, personId) {
 
     database.ref('orders/' + personId).set(list).then(function () {
         loadDueAlerts();
+        showGrowl('รับของทั้งหมดในชุดนี้เรียบร้อยแล้ว', 'success');
     }).catch(function (err) {
         console.error('Error updating batch:', err);
         alert('เกิดข้อผิดพลาดในการบันทึก: ' + err.message);
@@ -4858,6 +6130,7 @@ function saveCalendarNote() {
     resetCalendarNoteForm();
     renderModalNotesList(dateStr);
     renderCalendar();
+    showGrowl('บันทึก Note ปฏิทินเรียบร้อยแล้ว', 'success');
 }
 
 function deleteCalendarNote(noteId) {
@@ -4882,6 +6155,7 @@ function deleteCalendarNote(noteId) {
 
     renderModalNotesList(dateStr);
     renderCalendar();
+    showGrowl('ลบ Note เรียบร้อยแล้ว', 'info');
 }
 
 /* ==========================================================================
@@ -4972,6 +6246,7 @@ function initWebLock() {
             isWebUnlocked = true;
             if (errorEl) errorEl.classList.add('hidden');
             lockScreen.classList.add('unlocked');
+            showGrowl('เข้าสู่ระบบสำเร็จ ยินดีต้อนรับ', 'success');
         } else {
             if (errorEl) errorEl.classList.remove('hidden');
             if (lockCard) {
@@ -4981,6 +6256,7 @@ function initWebLock() {
             }
             pinInput.value = '';
             pinInput.focus();
+            showGrowl('รหัส PIN ไม่ถูกต้อง กรุณาลองใหม่', 'error');
         }
     }
 
@@ -5074,6 +6350,7 @@ function initCalendarLock() {
             const target = pendingCalViewMode;
             pendingCalViewMode = null;
             setCalendarViewMode(target);
+            showGrowl('ปลดล็อคปฏิทินส่วนตัวสำเร็จ', 'success');
         } else {
             if (errorEl) errorEl.classList.remove('hidden');
             if (modalContent) {
@@ -5083,6 +6360,7 @@ function initCalendarLock() {
             }
             pinInput.value = '';
             pinInput.focus();
+            showGrowl('รหัส PIN ไม่ถูกต้อง กรุณาลองใหม่', 'error');
         }
     }
 
@@ -5189,15 +6467,1040 @@ function openCalLockModal(personKey) {
     modal.classList.remove('hidden');
 }
 
-// Initialize Security PIN System when DOM is ready
+// Initialize Security PIN System, Mobile Service, and Borrow Parts when DOM is ready
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function () {
         initWebLock();
         initCalendarLock();
+        listenMobileServiceDatabase();
+        initBorrowModule();
     });
 } else {
     initWebLock();
     initCalendarLock();
+    listenMobileServiceDatabase();
+    initBorrowModule();
 }
+
+// ==========================================================================
+// BORROW PARTS MODULE (คนยืมอะไหล่ ยืม-คืน - รองรับหลายรายการ & เลขอะไหล่ 10 หลัก)
+// ==========================================================================
+
+let borrowedPartsData = {};
+let editingBorrowId = null;
+let borrowStatusFilter = 'pending'; // 'pending' | 'returned' | 'all'
+let borrowSearchQuery = '';
+let isBorrowInitialized = false;
+let isBorrowDbListening = false;
+let borrowTempBasket = []; // List of items borrowed in the current form session
+
+function showBorrow() {
+    currentPerson = 'borrow';
+    const headerSub = document.getElementById('header-sub');
+    if (headerSub) {
+        headerSub.classList.add('fade');
+        setTimeout(function () {
+            headerSub.textContent = 'คนยืมอะไหล่ - สมุดบันทึกยืม-คืนอะไหล่';
+            headerSub.classList.remove('fade');
+        }, 150);
+    }
+
+    updatePersonTabs();
+
+    // Hide other views
+    document.getElementById('view-person').classList.add('hidden');
+    document.getElementById('view-search-all').classList.add('hidden');
+    document.getElementById('view-notes').classList.add('hidden');
+    document.getElementById('view-alerts').classList.add('hidden');
+    document.getElementById('view-due-alerts').classList.add('hidden');
+    document.getElementById('view-deposit').classList.add('hidden');
+    const viewCal = document.getElementById('view-calendar');
+    if (viewCal) viewCal.classList.add('hidden');
+    const viewMs = document.getElementById('view-mobile-service');
+    if (viewMs) viewMs.classList.add('hidden');
+
+    const viewBorrow = document.getElementById('view-borrow');
+    if (viewBorrow) viewBorrow.classList.remove('hidden');
+
+    // Default date and time to now if not filled
+    setBorrowNowDefaults(false);
+
+    initBorrowModule();
+    renderBorrowRecords();
+
+    // Add animation to logo
+    const logoBox = document.querySelector('.logo-box');
+    if (logoBox) {
+        logoBox.classList.remove('pulse');
+        void logoBox.offsetWidth;
+        logoBox.classList.add('pulse');
+    }
+}
+
+function setBorrowNowDefaults(force = false) {
+    const dateInput = document.getElementById('borrow-date');
+    const timeInput = document.getElementById('borrow-time');
+    const now = new Date();
+    const todayStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+    const timeStr = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+
+    if (dateInput && (!dateInput.value || force)) {
+        dateInput.value = todayStr;
+    }
+    if (timeInput && (!timeInput.value || force)) {
+        timeInput.value = timeStr;
+    }
+}
+
+// 10 PIN Boxes logic for Borrow Part Number (Strict: 10 Digits)
+function initBorrowPinInput() {
+    const pinBoxes = document.getElementById('borrow-pin-boxes');
+    const hiddenInput = document.getElementById('borrow-part-no-hidden');
+    const partNoInput = document.getElementById('borrow-part-no');
+    const statusBadge = document.getElementById('borrow-pin-status-badge');
+    const clearBtn = document.getElementById('btn-clear-borrow-pin');
+    const partNameInput = document.getElementById('borrow-part-name');
+
+    if (!pinBoxes || !hiddenInput) return;
+
+    // Build 10 boxes if empty
+    if (pinBoxes.children.length === 0) {
+        pinBoxes.innerHTML = '';
+        for (let i = 0; i < 10; i++) {
+            const box = document.createElement('div');
+            box.className = 'pin-box-small';
+            box.dataset.index = i;
+            pinBoxes.appendChild(box);
+        }
+    }
+
+    const boxes = pinBoxes.querySelectorAll('.pin-box-small');
+
+    function updateBoxes() {
+        const value = (hiddenInput.value || '').toUpperCase();
+        boxes.forEach(function (box, index) {
+            if (index < value.length) {
+                box.textContent = value[index];
+                box.classList.add('filled');
+            } else {
+                box.textContent = '';
+                box.classList.remove('filled');
+            }
+        });
+
+        boxes.forEach(function (box) {
+            box.classList.remove('active');
+        });
+
+        if (value.length < 10) {
+            if (boxes[value.length]) boxes[value.length].classList.add('active');
+            pinBoxes.classList.remove('pin-complete');
+            if (statusBadge) {
+                statusBadge.className = 'badge pin-status-pill';
+                const remaining = 10 - value.length;
+                statusBadge.innerHTML = '<i class="fa-solid fa-keyboard me-1"></i> ' + value.length + ' / 10 หลัก (ขาดอีก ' + remaining + ' ตัว)';
+            }
+        } else {
+            pinBoxes.classList.add('pin-complete');
+            if (statusBadge) {
+                statusBadge.className = 'badge pin-status-pill is-complete';
+                statusBadge.innerHTML = '<i class="fa-solid fa-circle-check me-1"></i> ครบ 10 หลักแล้ว';
+            }
+        }
+
+        if (partNoInput) partNoInput.value = value;
+    }
+
+    // Input typing listener
+    hiddenInput.oninput = function () {
+        this.value = this.value.toUpperCase();
+        updateBoxes();
+        // Auto-advance to part name when 10 digits are filled
+        if (this.value.length === 10 && partNameInput) {
+            setTimeout(function () {
+                partNameInput.focus();
+            }, 80);
+        }
+    };
+
+    // Smart Paste (strips spaces/dashes, caps at 10 digits)
+    hiddenInput.onpaste = function (e) {
+        e.preventDefault();
+        const pasteText = (e.clipboardData || window.clipboardData).getData('text') || '';
+        const clean = pasteText.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 10);
+        this.value = clean;
+        updateBoxes();
+        if (clean.length === 10 && partNameInput) {
+            setTimeout(function () {
+                partNameInput.focus();
+            }, 80);
+        }
+    };
+
+    // Click boxes to focus hidden input
+    pinBoxes.onclick = function () {
+        hiddenInput.focus();
+    };
+
+    // Clear PIN button
+    if (clearBtn) {
+        clearBtn.onclick = function () {
+            clearBorrowPinInput();
+            hiddenInput.focus();
+        };
+    }
+
+    updateBoxes();
+}
+
+function clearBorrowPinInput() {
+    const hiddenInput = document.getElementById('borrow-part-no-hidden');
+    const partNoInput = document.getElementById('borrow-part-no');
+    const pinBoxes = document.getElementById('borrow-pin-boxes');
+    const statusBadge = document.getElementById('borrow-pin-status-badge');
+
+    if (hiddenInput) hiddenInput.value = '';
+    if (partNoInput) partNoInput.value = '';
+
+    if (pinBoxes) {
+        pinBoxes.classList.remove('pin-complete');
+        const boxes = pinBoxes.querySelectorAll('.pin-box-small');
+        boxes.forEach(function (box, idx) {
+            box.textContent = '';
+            box.classList.remove('filled', 'active');
+            if (idx === 0) box.classList.add('active');
+        });
+    }
+
+    if (statusBadge) {
+        statusBadge.className = 'badge pin-status-pill';
+        statusBadge.innerHTML = '<i class="fa-solid fa-keyboard me-1"></i> 0 / 10 หลัก';
+    }
+}
+
+function initBorrowModule() {
+    if (isBorrowInitialized) return;
+    isBorrowInitialized = true;
+
+    // Load from local cache first for instant responsiveness
+    try {
+        const cached = localStorage.getItem('borrowed_parts_cache');
+        if (cached) {
+            borrowedPartsData = JSON.parse(cached) || {};
+            updateBorrowStats();
+        }
+    } catch (e) {
+        console.warn('Could not read borrow cache:', e);
+    }
+
+    // Set defaults
+    setBorrowNowDefaults(false);
+
+    // Initialize 10 PIN boxes
+    initBorrowPinInput();
+
+    // Quick Staff Chips
+    document.querySelectorAll('.borrow-chip-btn[data-borrow-person]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            const personName = this.dataset.borrowPerson;
+            const input = document.getElementById('borrow-name');
+            if (input) {
+                input.value = personName;
+            }
+            // Highlight clicked chip
+            document.querySelectorAll('.borrow-chip-btn').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+
+            // Focus on part number PIN input
+            const hiddenPin = document.getElementById('borrow-part-no-hidden');
+            if (hiddenPin) hiddenPin.focus();
+        });
+    });
+
+    // Stepper buttons for Quantity
+    const btnMinus = document.getElementById('btn-borrow-qty-minus');
+    const btnPlus = document.getElementById('btn-borrow-qty-plus');
+    const qtyInput = document.getElementById('borrow-qty');
+
+    if (btnMinus && qtyInput) {
+        btnMinus.addEventListener('click', function () {
+            let val = parseInt(qtyInput.value) || 1;
+            if (val > 1) {
+                qtyInput.value = val - 1;
+            }
+        });
+    }
+
+    if (btnPlus && qtyInput) {
+        btnPlus.addEventListener('click', function () {
+            let val = parseInt(qtyInput.value) || 1;
+            qtyInput.value = val + 1;
+        });
+    }
+
+    // "เพิ่มลงรายการ" Button (Add item to basket)
+    const btnAddItem = document.getElementById('btn-borrow-add-item');
+    if (btnAddItem) {
+        btnAddItem.addEventListener('click', addBorrowItemToBasket);
+    }
+
+    // "ล้างรายการที่เลือกทั้งหมด" Button in basket
+    const btnClearBasket = document.getElementById('btn-borrow-clear-basket');
+    if (btnClearBasket) {
+        btnClearBasket.addEventListener('click', function () {
+            borrowTempBasket = [];
+            renderBorrowBasket();
+            showGrowl('ล้างรายการอะไหล่ในตะกร้าเรียบร้อยแล้ว', 'info', 1000);
+        });
+    }
+
+    // "ใช้วันและเวลานี้" Button
+    const btnNow = document.getElementById('btn-borrow-now');
+    if (btnNow) {
+        btnNow.addEventListener('click', function () {
+            setBorrowNowDefaults(true);
+            showGrowl('ตั้งค่าวันและเวลาเป็นปัจจุบันเรียบร้อยแล้ว', 'info', 1000);
+        });
+    }
+
+    // Save Button
+    const btnSave = document.getElementById('btn-borrow-save');
+    if (btnSave) {
+        btnSave.addEventListener('click', saveBorrow);
+    }
+
+    // Clear Form Button
+    const btnClear = document.getElementById('btn-borrow-clear-form');
+    if (btnClear) {
+        btnClear.addEventListener('click', function () {
+            resetBorrowForm();
+            showGrowl('ล้างฟอร์มเรียบร้อยแล้ว', 'info', 1000);
+        });
+    }
+
+    // Cancel Edit Button
+    const btnCancel = document.getElementById('btn-borrow-cancel-edit');
+    if (btnCancel) {
+        btnCancel.addEventListener('click', resetBorrowForm);
+    }
+
+    // Search Input
+    const searchInput = document.getElementById('borrow-search-input');
+    if (searchInput) {
+        searchInput.addEventListener('input', function () {
+            borrowSearchQuery = this.value.trim().toLowerCase();
+            renderBorrowRecords();
+        });
+    }
+
+    // Filter Group Buttons (pending, returned, all)
+    const filterGroup = document.getElementById('borrow-filter-group');
+    if (filterGroup) {
+        filterGroup.querySelectorAll('button[data-borrow-status]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                setBorrowFilter(this.dataset.borrowStatus);
+            });
+        });
+    }
+
+    // Header Stat Pills (click to filter)
+    document.querySelectorAll('.borrow-stat-pill[data-borrow-filter]').forEach(function (pill) {
+        pill.addEventListener('click', function () {
+            setBorrowFilter(this.dataset.borrowFilter);
+        });
+    });
+
+    // Start listening to Firebase Realtime Database
+    listenBorrowDatabase();
+}
+
+function addBorrowItemToBasket() {
+    const hiddenPin = document.getElementById('borrow-part-no-hidden');
+    const partNameInput = document.getElementById('borrow-part-name');
+    const qtyInput = document.getElementById('borrow-qty');
+
+    const partNo = hiddenPin ? hiddenPin.value.trim().toUpperCase() : '';
+    const partName = partNameInput ? partNameInput.value.trim() : '';
+    const qty = qtyInput ? (parseInt(qtyInput.value) || 1) : 1;
+
+    // Strict validation: Part number MUST be exactly 10 characters (ไม่ขาดไม่เกิน 10 ตัว)
+    if (!partNo) {
+        showGrowl('กรุณากรอกเลขอะไหล่ 10 หลัก (ไม่ขาดไม่เกิน 10 ตัว)', 'warning');
+        if (hiddenPin) hiddenPin.focus();
+        return;
+    }
+
+    if (partNo.length < 10) {
+        const remaining = 10 - partNo.length;
+        showGrowl('เลขอะไหล่ต้องมี 10 หลักพอดี! ขณะนี้มี ' + partNo.length + ' ตัว (ขาดอีก ' + remaining + ' ตัว)', 'warning');
+        if (hiddenPin) hiddenPin.focus();
+        return;
+    }
+
+    if (partNo.length > 10) {
+        showGrowl('เลขอะไหล่ต้องไม่เกิน 10 ตัว (ขณะนี้มี ' + partNo.length + ' ตัว)', 'warning');
+        if (hiddenPin) hiddenPin.focus();
+        return;
+    }
+
+    if (!partName) {
+        showGrowl('กรุณากรอกชื่ออะไหล่ หรือรายละเอียดสิ่งที่ยืม', 'warning');
+        if (partNameInput) partNameInput.focus();
+        return;
+    }
+
+    // Add to temporary basket
+    borrowTempBasket.push({
+        id: 'item_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+        partNo: partNo,
+        partName: partName,
+        qty: qty
+    });
+
+    // Clear part inputs for next item
+    clearBorrowPinInput();
+    if (partNameInput) partNameInput.value = '';
+    if (qtyInput) qtyInput.value = 1;
+
+    renderBorrowBasket();
+
+    showGrowl('เพิ่ม ' + partName + ' ลงรายการแล้ว (รวม ' + borrowTempBasket.length + ' รายการ)', 'info', 1000);
+
+    // Focus back on PIN input for rapid next part entry
+    if (hiddenPin) hiddenPin.focus();
+}
+
+function removeBorrowItemFromBasket(index) {
+    if (index >= 0 && index < borrowTempBasket.length) {
+        const removed = borrowTempBasket.splice(index, 1)[0];
+        renderBorrowBasket();
+        if (removed) {
+            showGrowl('ลบ ' + removed.partName + ' ออกจากรายการแล้ว', 'info', 1000);
+        }
+    }
+}
+
+function renderBorrowBasket() {
+    const basketContainer = document.getElementById('borrow-items-basket');
+    const basketList = document.getElementById('borrow-basket-list');
+    const basketCount = document.getElementById('borrow-basket-count');
+    const saveBtnText = document.getElementById('btn-borrow-save-text');
+
+    if (!basketContainer || !basketList) return;
+
+    if (borrowTempBasket.length === 0) {
+        basketContainer.style.display = 'none';
+        basketList.innerHTML = '';
+        if (saveBtnText) {
+            saveBtnText.textContent = editingBorrowId ? 'บันทึกการแก้ไข' : 'บันทึกการยืมอะไหล่';
+        }
+        return;
+    }
+
+    basketContainer.style.display = 'block';
+
+    const totalQty = borrowTempBasket.reduce((sum, it) => sum + (parseInt(it.qty) || 1), 0);
+    if (basketCount) {
+        basketCount.textContent = borrowTempBasket.length + ' รายการ (' + totalQty + ' ชิ้น)';
+    }
+
+    if (saveBtnText) {
+        saveBtnText.textContent = (editingBorrowId ? 'บันทึกการแก้ไขทั้งหมด (' : 'บันทึกการยืมทั้งหมด (') + borrowTempBasket.length + ' รายการ)';
+    }
+
+    let html = '';
+    borrowTempBasket.forEach(function (it, idx) {
+        html += `
+        <div class="borrow-basket-item">
+            <div class="borrow-basket-item-info">
+                <span class="badge bg-secondary rounded-pill" style="font-size:0.75rem;">${idx + 1}</span>
+                <span class="borrow-part-no-pill font-monospace"><i class="fa-solid fa-barcode me-1"></i>${escapeHtml(it.partNo)}</span>
+                <span class="borrow-basket-item-name">${escapeHtml(it.partName)}</span>
+                <span class="borrow-qty-pill">x ${it.qty || 1} ชิ้น</span>
+            </div>
+            <button type="button" class="borrow-basket-btn-del" onclick="removeBorrowItemFromBasket(${idx})" title="ลบรายการนี้">
+                <i class="fa-solid fa-trash-can"></i>
+            </button>
+        </div>
+        `;
+    });
+
+    basketList.innerHTML = html;
+}
+
+function setBorrowFilter(filter) {
+    borrowStatusFilter = filter || 'pending';
+
+    // Update filter toolbar buttons
+    const filterGroup = document.getElementById('borrow-filter-group');
+    if (filterGroup) {
+        filterGroup.querySelectorAll('button[data-borrow-status]').forEach(function (btn) {
+            btn.classList.toggle('active', btn.dataset.borrowStatus === borrowStatusFilter);
+        });
+    }
+
+    // Update header stat pills
+    document.querySelectorAll('.borrow-stat-pill[data-borrow-filter]').forEach(function (pill) {
+        pill.classList.toggle('active', pill.dataset.borrowFilter === borrowStatusFilter);
+    });
+
+    renderBorrowRecords();
+}
+
+function listenBorrowDatabase() {
+    if (isBorrowDbListening) return;
+    isBorrowDbListening = true;
+
+    database.ref('borrowed_parts').on('value', function (snapshot) {
+        borrowedPartsData = snapshot.val() || {};
+        try {
+            localStorage.setItem('borrowed_parts_cache', JSON.stringify(borrowedPartsData));
+        } catch (e) {}
+
+        updateBorrowStats();
+
+        if (currentPerson === 'borrow') {
+            renderBorrowRecords();
+        }
+    }, function (error) {
+        console.error('Error listening to borrowed_parts in Firebase:', error);
+    });
+}
+
+function updateBorrowStats() {
+    const list = Object.values(borrowedPartsData || {});
+    let pendingCount = 0;
+    let returnedCount = 0;
+    const totalCount = list.length;
+
+    list.forEach(function (item) {
+        if (item.status === 'returned') {
+            returnedCount++;
+        } else {
+            pendingCount++;
+        }
+    });
+
+    // Header counters
+    const elPending = document.getElementById('borrow-stat-pending');
+    const elReturned = document.getElementById('borrow-stat-returned');
+    const elTotal = document.getElementById('borrow-stat-total');
+
+    if (elPending) elPending.textContent = pendingCount;
+    if (elReturned) elReturned.textContent = returnedCount;
+    if (elTotal) elTotal.textContent = totalCount;
+
+    // Filter button counters
+    const fPending = document.getElementById('filter-count-pending');
+    const fReturned = document.getElementById('filter-count-returned');
+    const fAll = document.getElementById('filter-count-all');
+
+    if (fPending) fPending.textContent = pendingCount;
+    if (fReturned) fReturned.textContent = returnedCount;
+    if (fAll) fAll.textContent = totalCount;
+
+    // Main navigation tab badge
+    const badge = document.getElementById('badge-borrow-pending');
+    if (badge) {
+        if (pendingCount > 0) {
+            badge.textContent = pendingCount;
+            badge.classList.remove('hidden');
+            badge.title = 'มี ' + pendingCount + ' รายการอะไหล่ที่ยังไม่ได้คืน';
+        } else {
+            badge.textContent = '0';
+            badge.classList.add('hidden');
+        }
+    }
+}
+
+function saveBorrow() {
+    const nameInput = document.getElementById('borrow-name');
+    const dateInput = document.getElementById('borrow-date');
+    const timeInput = document.getElementById('borrow-time');
+    const noteInput = document.getElementById('borrow-note');
+    const hiddenPin = document.getElementById('borrow-part-no-hidden');
+    const partNameInput = document.getElementById('borrow-part-name');
+
+    const borrowerName = nameInput ? nameInput.value.trim() : '';
+    const borrowDate = dateInput ? dateInput.value : '';
+    const borrowTime = timeInput ? timeInput.value : '';
+    const note = noteInput ? noteInput.value.trim() : '';
+
+    if (!borrowerName) {
+        showGrowl('กรุณาระบุชื่อคนยืมอะไหล่', 'warning');
+        if (nameInput) nameInput.focus();
+        return;
+    }
+
+    // If basket is empty but user filled the part fields, attempt to add it automatically
+    if (borrowTempBasket.length === 0) {
+        const curPin = hiddenPin ? hiddenPin.value.trim() : '';
+        const curName = partNameInput ? partNameInput.value.trim() : '';
+        if (curPin || curName) {
+            addBorrowItemToBasket();
+        }
+    }
+
+    if (borrowTempBasket.length === 0) {
+        showGrowl('กรุณาเพิ่มรายการอะไหล่ที่ต้องการยืมอย่างน้อย 1 รายการ (กดปุ่ม "เพิ่มลงรายการ")', 'warning');
+        if (hiddenPin) hiddenPin.focus();
+        return;
+    }
+
+    const id = editingBorrowId || ('br_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6));
+    const existing = editingBorrowId && borrowedPartsData[editingBorrowId] ? borrowedPartsData[editingBorrowId] : null;
+
+    let timestamp = Date.now();
+    if (borrowDate) {
+        const timePart = borrowTime || '00:00';
+        const parsed = new Date(borrowDate + 'T' + timePart).getTime();
+        if (!isNaN(parsed)) timestamp = parsed;
+    }
+
+    // Calculate aggregated strings for search and backwards compatibility
+    const allPartNames = borrowTempBasket.map(i => i.partName).join(', ');
+    const firstPartNo = borrowTempBasket[0]?.partNo || '';
+    const totalQty = borrowTempBasket.reduce((sum, i) => sum + (parseInt(i.qty) || 1), 0);
+
+    const record = {
+        id: id,
+        borrowerName: borrowerName,
+        items: JSON.parse(JSON.stringify(borrowTempBasket)),
+        partName: allPartNames,
+        partNo: firstPartNo,
+        qty: totalQty,
+        borrowDate: borrowDate || getTodayIsoString(),
+        borrowTime: borrowTime || getCurrentTime().substring(0, 5),
+        borrowTimestamp: timestamp,
+        note: note,
+        status: existing ? (existing.status || 'pending') : 'pending',
+        returnDate: existing ? (existing.returnDate || '') : '',
+        returnTime: existing ? (existing.returnTime || '') : '',
+        returnTimestamp: existing ? (existing.returnTimestamp || 0) : 0,
+        createdAt: existing ? (existing.createdAt || todayTh()) : todayTh(),
+        createdTime: existing ? (existing.createdTime || getCurrentTime()) : getCurrentTime(),
+        updatedAt: todayTh() + ' ' + getCurrentTime()
+    };
+
+    const isEdit = !!editingBorrowId;
+    const itemsCount = borrowTempBasket.length;
+
+    database.ref('borrowed_parts/' + id).set(record).then(function () {
+        resetBorrowForm();
+        if (isEdit) {
+            showGrowl('แก้ไขข้อมูลการยืม ' + itemsCount + ' รายการ ของ ' + borrowerName + ' เรียบร้อยแล้ว', 'info');
+        } else {
+            showGrowl('บันทึกการยืม ' + itemsCount + ' รายการ ให้กับ ' + borrowerName + ' เรียบร้อยแล้ว', 'success');
+        }
+    }).catch(function (error) {
+        console.error('Error saving borrowed part:', error);
+        showGrowl('เกิดข้อผิดพลาดในการบันทึก: ' + error.message, 'error');
+    });
+}
+
+function resetBorrowForm() {
+    editingBorrowId = null;
+    borrowTempBasket = [];
+
+    const editIdInput = document.getElementById('borrow-edit-id');
+    if (editIdInput) editIdInput.value = '';
+
+    const formTitle = document.getElementById('borrow-form-title');
+    if (formTitle) {
+        formTitle.innerHTML = '<span class="borrow-icon-circle"><i class="fa-solid fa-plus"></i></span><span>ลงบันทึกการยืมอะไหล่</span>';
+    }
+
+    const saveBtn = document.getElementById('btn-borrow-save');
+    const saveBtnText = document.getElementById('btn-borrow-save-text');
+    if (saveBtnText) {
+        saveBtnText.textContent = 'บันทึกการยืมอะไหล่';
+    }
+    if (saveBtn) {
+        saveBtn.className = 'btn btn-primary w-100 borrow-submit-btn fw-bold d-flex align-items-center justify-content-center gap-2';
+    }
+
+    const cancelBtn = document.getElementById('btn-borrow-cancel-edit');
+    if (cancelBtn) cancelBtn.classList.add('hidden');
+
+    const nameInput = document.getElementById('borrow-name');
+    if (nameInput) nameInput.value = '';
+
+    const partNameInput = document.getElementById('borrow-part-name');
+    if (partNameInput) partNameInput.value = '';
+
+    const qtyInput = document.getElementById('borrow-qty');
+    if (qtyInput) qtyInput.value = 1;
+
+    const noteInput = document.getElementById('borrow-note');
+    if (noteInput) noteInput.value = '';
+
+    // Clear 10 PIN boxes
+    clearBorrowPinInput();
+
+    // Clear Basket
+    renderBorrowBasket();
+
+    // Clear active chip
+    document.querySelectorAll('.borrow-chip-btn').forEach(b => b.classList.remove('active'));
+
+    // Reset date/time to now
+    setBorrowNowDefaults(true);
+}
+
+function editBorrow(id) {
+    const item = borrowedPartsData[id];
+    if (!item) return;
+
+    editingBorrowId = id;
+
+    const editIdInput = document.getElementById('borrow-edit-id');
+    if (editIdInput) editIdInput.value = id;
+
+    const formTitle = document.getElementById('borrow-form-title');
+    if (formTitle) {
+        formTitle.innerHTML = '<span class="borrow-icon-circle" style="background:rgba(59,130,246,0.15);color:#2563eb;"><i class="fa-solid fa-pen-to-square"></i></span><span>แก้ไขข้อมูลการยืม: ' + escapeHtml(item.borrowerName || '') + '</span>';
+    }
+
+    const cancelBtn = document.getElementById('btn-borrow-cancel-edit');
+    if (cancelBtn) cancelBtn.classList.remove('hidden');
+
+    const nameInput = document.getElementById('borrow-name');
+    if (nameInput) nameInput.value = item.borrowerName || '';
+
+    const dateInput = document.getElementById('borrow-date');
+    if (dateInput) dateInput.value = item.borrowDate || '';
+
+    const timeInput = document.getElementById('borrow-time');
+    if (timeInput) timeInput.value = item.borrowTime || '';
+
+    const noteInput = document.getElementById('borrow-note');
+    if (noteInput) noteInput.value = item.note || '';
+
+    // Load items into temporary basket
+    if (item.items && Array.isArray(item.items) && item.items.length > 0) {
+        borrowTempBasket = JSON.parse(JSON.stringify(item.items));
+    } else {
+        borrowTempBasket = [{
+            id: 'item_' + Date.now(),
+            partNo: item.partNo || '',
+            partName: item.partName || '-',
+            qty: item.qty || 1
+        }];
+    }
+
+    renderBorrowBasket();
+
+    // Clear part entry fields for next item
+    clearBorrowPinInput();
+    const partNameInput = document.getElementById('borrow-part-name');
+    if (partNameInput) partNameInput.value = '';
+
+    // Update chip highlight if matches
+    document.querySelectorAll('.borrow-chip-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.borrowPerson === item.borrowerName);
+    });
+
+    // Scroll form into view smoothly
+    const formCard = document.querySelector('.borrow-form-card');
+    if (formCard) {
+        formCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+}
+
+function markBorrowReturned(id) {
+    const item = borrowedPartsData[id];
+    if (!item) return;
+
+    const now = new Date();
+    const returnDate = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+    const returnTime = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+
+    database.ref('borrowed_parts/' + id).update({
+        status: 'returned',
+        returnDate: returnDate,
+        returnTime: returnTime,
+        returnTimestamp: Date.now(),
+        updatedAt: todayTh() + ' ' + getCurrentTime()
+    }).then(function () {
+        showGrowl('บันทึกการคืนอะไหล่ของ ' + item.borrowerName + ' เรียบร้อยแล้ว', 'success');
+    }).catch(function (error) {
+        console.error('Error marking returned:', error);
+        showGrowl('เกิดข้อผิดพลาด: ' + error.message, 'error');
+    });
+}
+
+function undoBorrowReturned(id) {
+    const item = borrowedPartsData[id];
+    if (!item) return;
+
+    database.ref('borrowed_parts/' + id).update({
+        status: 'pending',
+        returnDate: '',
+        returnTime: '',
+        returnTimestamp: 0,
+        updatedAt: todayTh() + ' ' + getCurrentTime()
+    }).then(function () {
+        showGrowl('ย้อนสถานะเป็น "ยังไม่คืน" เรียบร้อยแล้ว', 'info');
+    }).catch(function (error) {
+        console.error('Error undoing return:', error);
+        showGrowl('เกิดข้อผิดพลาด: ' + error.message, 'error');
+    });
+}
+
+function deleteBorrow(id) {
+    const item = borrowedPartsData[id];
+    if (!item) return;
+
+    const name = item.borrowerName || 'รายการนี้';
+    if (!confirm('คุณต้องการลบข้อมูลการยืมของ ' + name + ' ใช่หรือไม่?')) {
+        return;
+    }
+
+    database.ref('borrowed_parts/' + id).remove().then(function () {
+        if (editingBorrowId === id) {
+            resetBorrowForm();
+        }
+        showGrowl('ลบรายการยืมของ ' + name + ' เรียบร้อยแล้ว', 'error');
+    }).catch(function (error) {
+        console.error('Error deleting borrowed part:', error);
+        showGrowl('เกิดข้อผิดพลาดในการลบ: ' + error.message, 'error');
+    });
+}
+
+function formatBorrowElapsed(dateStr, timeStr) {
+    if (!dateStr) return '';
+    try {
+        const timePart = timeStr ? (timeStr + ':00') : '00:00:00';
+        const past = new Date(dateStr + 'T' + timePart).getTime();
+        if (isNaN(past)) return '';
+        const diffMs = Date.now() - past;
+        if (diffMs < 0) return 'เพิ่งยืมไป';
+        const diffMin = Math.floor(diffMs / (1000 * 60));
+        const diffHour = Math.floor(diffMin / 60);
+        const diffDay = Math.floor(diffHour / 24);
+
+        if (diffDay > 0) {
+            return 'ยืมไปแล้ว ' + diffDay + ' วัน' + (diffHour % 24 > 0 ? ' ' + (diffHour % 24) + ' ชม.' : '');
+        }
+        if (diffHour > 0) {
+            return 'ยืมไปแล้ว ' + diffHour + ' ชม.' + (diffMin % 60 > 0 ? ' ' + (diffMin % 60) + ' นาที' : '');
+        }
+        if (diffMin > 0) {
+            return 'ยืมไปแล้ว ' + diffMin + ' นาที';
+        }
+        return 'เพิ่งยืมไปเมื่อสักครู่';
+    } catch (e) {
+        return '';
+    }
+}
+
+function formatThaiDateDisplay(dateStr) {
+    if (!dateStr) return '-';
+    try {
+        const parts = dateStr.split('-');
+        if (parts.length === 3) {
+            const year = parseInt(parts[0]) + 543;
+            const months = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+            const month = months[parseInt(parts[1]) - 1] || parts[1];
+            const day = parseInt(parts[2]);
+            return day + ' ' + month + ' ' + year;
+        }
+        return dateStr;
+    } catch (e) {
+        return dateStr;
+    }
+}
+
+function renderBorrowRecords() {
+    const container = document.getElementById('borrow-records-container');
+    const emptyState = document.getElementById('borrow-empty-state');
+    const heading = document.getElementById('borrow-list-heading');
+    const countBadge = document.getElementById('borrow-list-badge-count');
+
+    if (!container) return;
+
+    let records = Object.values(borrowedPartsData || {});
+
+    // Filter by status
+    if (borrowStatusFilter === 'pending') {
+        records = records.filter(item => item.status !== 'returned');
+        if (heading) heading.textContent = 'รายการอะไหล่ที่กำลังยืมอยู่ (ยังไม่คืน)';
+    } else if (borrowStatusFilter === 'returned') {
+        records = records.filter(item => item.status === 'returned');
+        if (heading) heading.textContent = 'รายการอะไหล่ที่นำมาคืนแล้ว';
+    } else {
+        if (heading) heading.textContent = 'รายการบันทึกการยืมอะไหล่ทั้งหมด';
+    }
+
+    // Filter by search query across borrower name, all part names, all part numbers, and notes
+    if (borrowSearchQuery) {
+        const q = borrowSearchQuery;
+        records = records.filter(item => {
+            const name = (item.borrowerName || '').toLowerCase();
+            const partName = (item.partName || '').toLowerCase();
+            const partNo = (item.partNo || '').toLowerCase();
+            const note = (item.note || '').toLowerCase();
+
+            let itemsMatch = false;
+            if (item.items && Array.isArray(item.items)) {
+                itemsMatch = item.items.some(it => {
+                    return (it.partName || '').toLowerCase().includes(q) || (it.partNo || '').toLowerCase().includes(q);
+                });
+            }
+
+            return name.includes(q) || partName.includes(q) || partNo.includes(q) || note.includes(q) || itemsMatch;
+        });
+    }
+
+    // Sort: pending first by borrowTimestamp descending, returned by returnTimestamp descending
+    records.sort(function (a, b) {
+        if (a.status !== b.status) {
+            return a.status === 'returned' ? 1 : -1;
+        }
+        if (a.status === 'returned') {
+            return (b.returnTimestamp || 0) - (a.returnTimestamp || 0);
+        }
+        return (b.borrowTimestamp || 0) - (a.borrowTimestamp || 0);
+    });
+
+    if (countBadge) {
+        countBadge.textContent = records.length + ' การยืม';
+    }
+
+    if (records.length === 0) {
+        container.innerHTML = '';
+        if (emptyState) emptyState.classList.remove('hidden');
+        return;
+    }
+
+    if (emptyState) emptyState.classList.add('hidden');
+
+    let html = '';
+    records.forEach(function (item) {
+        const isReturned = (item.status === 'returned');
+        const elapsedText = isReturned ? '' : formatBorrowElapsed(item.borrowDate, item.borrowTime);
+        const thaiBorrowDate = formatThaiDateDisplay(item.borrowDate);
+        const timeBorrowStr = item.borrowTime ? (item.borrowTime + ' น.') : '';
+        const thaiReturnDate = isReturned ? formatThaiDateDisplay(item.returnDate) : '';
+        const timeReturnStr = isReturned && item.returnTime ? (item.returnTime + ' น.') : '';
+
+        // Check if borrowed for more than 2 days
+        const isOverdueWarn = !isReturned && (item.borrowDate && item.borrowDate < getTodayIsoString());
+
+        // Items list in this borrow session
+        const itemsList = item.items && Array.isArray(item.items) && item.items.length > 0
+            ? item.items
+            : [{
+                partNo: item.partNo || '',
+                partName: item.partName || '-',
+                qty: item.qty || 1
+            }];
+
+        const totalItemsCount = itemsList.length;
+        const totalQtyCount = itemsList.reduce((sum, it) => sum + (parseInt(it.qty) || 1), 0);
+
+        html += `
+        <div class="borrow-record-card ${isReturned ? 'status-returned' : 'status-pending'}" id="card-borrow-${item.id}">
+            <div>
+                <!-- Top Row: Borrower & Status Badge -->
+                <div class="borrow-card-top">
+                    <div class="borrower-badge">
+                        <i class="fa-solid fa-user-gear"></i>
+                        <span>${escapeHtml(item.borrowerName || 'ไม่ระบุ')}</span>
+                    </div>
+                    <div class="d-flex align-items-center gap-1">
+                        ${totalItemsCount > 1 ? `
+                            <span class="badge rounded-pill bg-primary" style="font-size:0.75rem;">
+                                <i class="fa-solid fa-boxes-stacked me-1"></i>${totalItemsCount} รายการ (${totalQtyCount} ชิ้น)
+                            </span>
+                        ` : ''}
+                        <div class="borrow-status-badge ${isReturned ? 'returned' : 'pending'}">
+                            ${isReturned
+                                ? '<i class="fa-solid fa-circle-check"></i> คืนแล้ว'
+                                : '<span class="pulse-dot warning"></span> ยังไม่คืน'}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Itemized List of Parts Borrowed by this technician -->
+                <div class="borrow-items-container">
+                    ${itemsList.map(function (it, idx) {
+                        return `
+                        <div class="borrow-item-row">
+                            <span class="borrow-item-idx">${idx + 1}.</span>
+                            <div class="borrow-item-info">
+                                <span class="borrow-item-name">${escapeHtml(it.partName || '-')}</span>
+                                ${it.partNo ? `<span class="borrow-part-no-pill font-monospace"><i class="fa-solid fa-barcode me-1"></i>${escapeHtml(it.partNo)}</span>` : ''}
+                            </div>
+                            <span class="borrow-qty-pill">x ${it.qty || 1} ชิ้น</span>
+                        </div>
+                        `;
+                    }).join('')}
+                </div>
+
+                <!-- Time & Elapsed Section -->
+                <div class="borrow-time-row">
+                    <div class="borrow-time-item">
+                        <span><i class="fa-solid fa-clock text-primary me-1"></i>ยืมเมื่อ:</span>
+                        <span class="fw-semibold text-dark">${thaiBorrowDate} ${timeBorrowStr}</span>
+                    </div>
+                    ${!isReturned && elapsedText ? `
+                    <div class="borrow-time-item mt-1">
+                        <span class="small text-muted">ระยะเวลา:</span>
+                        <span class="borrow-elapsed-pill ${isOverdueWarn ? '' : 'normal'}">
+                            <i class="fa-solid ${isOverdueWarn ? 'fa-triangle-exclamation' : 'fa-hourglass-half'}"></i>
+                            ${elapsedText}
+                        </span>
+                    </div>
+                    ` : ''}
+                    ${isReturned ? `
+                    <div class="borrow-time-item mt-1 text-success">
+                        <span><i class="fa-solid fa-check-double me-1"></i>คืนเมื่อ:</span>
+                        <span class="fw-bold text-success">${thaiReturnDate} ${timeReturnStr}</span>
+                    </div>
+                    ` : ''}
+                </div>
+
+                <!-- Note / Purpose (if any) -->
+                ${item.note ? `
+                <div class="borrow-note-bubble">
+                    <i class="fa-solid fa-comment-dots me-1"></i>${escapeHtml(item.note)}
+                </div>
+                ` : ''}
+            </div>
+
+            <!-- Card Bottom Actions -->
+            <div class="borrow-card-actions">
+                ${!isReturned ? `
+                <button type="button" class="btn-borrow-action btn-borrow-return" onclick="markBorrowReturned('${item.id}')" title="กดเมื่อช่างนำอะไหล่มาคืนทั้งหมดแล้ว">
+                    <i class="fa-solid fa-check-double me-1"></i>นำมาคืนแล้ว
+                </button>
+                ` : `
+                <button type="button" class="btn-borrow-action btn-borrow-undo" onclick="undoBorrowReturned('${item.id}')" title="ย้อนสถานะกลับเป็นยังไม่คืน">
+                    <i class="fa-solid fa-rotate-left me-1"></i>ย้อนเป็นยังไม่คืน
+                </button>
+                `}
+                <button type="button" class="btn-borrow-action btn-borrow-icon btn-borrow-edit" onclick="editBorrow('${item.id}')" title="แก้ไขรายการ">
+                    <i class="fa-solid fa-pen"></i>
+                </button>
+                <button type="button" class="btn-borrow-action btn-borrow-icon btn-borrow-delete" onclick="deleteBorrow('${item.id}')" title="ลบรายการนี้">
+                    <i class="fa-solid fa-trash"></i>
+                </button>
+            </div>
+        </div>
+        `;
+    });
+
+    container.innerHTML = html;
+}
+
+// Expose actions to window for inline onclick handlers
+window.markBorrowReturned = markBorrowReturned;
+window.undoBorrowReturned = undoBorrowReturned;
+window.editBorrow = editBorrow;
+window.deleteBorrow = deleteBorrow;
+window.showBorrow = showBorrow;
+window.removeBorrowItemFromBasket = removeBorrowItemFromBasket;
+
 
 
